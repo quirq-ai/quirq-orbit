@@ -1,0 +1,210 @@
+<p><strong>The inspector of a space: the apps and files on this machine, one at a time, under one bar.</strong></p>
+<p>galileo keeps a list of <strong>sources</strong>, the things you want to look at. There are
+two kinds:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Add it as</th>
+<th>It shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a port</td>
+<td><code>5173</code></td>
+<td>the app that answers on that port of this machine</td>
+</tr>
+<tr>
+<td>files</td>
+<td><code>~/notes</code> or <code>~/out/report.html</code></td>
+<td>a folder's pages and files, or one file, read only</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each source gets an address of its own, <code>&lt;name&gt;.localhost:4100</code>, and opens
+under <strong>telescope</strong>, galileo's bar and router:</p>
+<pre><code>localhost:4100/sources          the Sources page: add, open and remove sources
+localhost:4100/s/acme/pricing   the source acme, at /pricing, under the bar
+</code></pre>
+  
+    
+      <pre>flowchart LR
+  subgraph tab["a browser tab on localhost:4100"]
+    bar["telescope&lt;br/&gt;the bar and router"]
+    frame["the source, in a frame&lt;br/&gt;acme.localhost:4100"]
+  end
+  galileo["galileo&lt;br/&gt;127.0.0.1:4100"]
+  app["an app on a port&lt;br/&gt;localhost:5173"]
+  disk["files on disk&lt;br/&gt;~/notes"]
+  bar --&gt;|"the sources API"| galileo
+  frame --&gt; galileo
+  galileo --&gt;|proxied| app
+  galileo --&gt;|read only| disk
+  frame -.-&gt;|"the bridge: where the page is"| bar
+</pre>
+    
+  
+  
+    
+      Loading
+  
+<p>The bar says which source you're on and where in it. Switch source from its
+menu, type a path, reload, or open the source in a tab of its own. As you
+click around inside a source, the bar and the address follow.</p>
+<p>galileo starts nothing: a port source shows whatever already answers there.
+It listens on <code>127.0.0.1</code> only, and only ever reads files.</p>
+<h3>Quick start</h3>
+<p>Node 20 or later, and nothing to install:</p>
+<pre>npm start</pre>
+<p>Open <a href="http://localhost:4100/" target="_blank" rel="noopener">http://localhost:4100/</a> and add a source on the Sources page: a name,
+and a port such as <code>5173</code> or a path such as <code>~/notes</code>. Sources can also be
+given when galileo starts:</p>
+<pre>npm start -- --source web=5173 --source notes=~/notes</pre>
+<p><code>npm run demo</code> starts a sample app and shows it, its folder of files, and this
+README as three sources.</p>
+<h3>Sources</h3>
+<ul>
+<li><strong>A port</strong> is an app on this machine, such as a dev server. galileo proxies
+it, WebSockets included, so hot reload keeps working. If nothing answers
+yet, the source shows a page that tries again every 2 seconds.</li>
+<li><strong>Files</strong> are a folder or a single file. A folder shows its <code>index.html</code>, or
+else a listing; a single file shows itself alone. Text files open as
+readable pages with a Raw link, images, video, audio and PDFs in their own
+viewers, and HTML as it is. Hidden files (<code>.env</code>, <code>.git</code>) are never shown,
+nothing outside the source is ever served, and nothing is ever written.</li>
+<li>A source's name becomes its address, so it is lowercase letters, digits and
+dashes. galileo keeps the list in <code>data/sources.json</code>, so sources stay
+across restarts.</li>
+</ul>
+<h3>telescope</h3>
+<p>telescope is galileo's whole page: the bar along the top and the view under
+it, which is the Sources page or one source in a frame.</p>
+<ul>
+<li><strong>The bar</strong>: galileo's mark (back to Sources), the source menu (ports and
+files, each with a dot for whether it is there), the path, reload, and open
+on its own.</li>
+<li><strong>The router</strong>: telescope owns the address. <code>/sources</code> is the Sources page;
+<code>/s/&lt;name&gt;/&lt;path&gt;</code> is a source at a path. Back and Forward work across
+sources and inside them.</li>
+<li><strong>The bridge</strong>: each page a source serves gets one small script appended,
+<code>/__xo/bridge.js</code>, which tells telescope where the page is whenever that
+changes. That's how the bar follows clicks inside a source.</li>
+</ul>
+<h3>How it works</h3>
+<ol>
+<li><strong>Route by hostname.</strong> <code>localhost:4100</code> is galileo's own: telescope and the
+sources API. <code>acme.localhost:4100</code> is the source acme. A name nobody added
+gets a page listing the real ones, and never another source.</li>
+<li><strong>Proxy or read.</strong> A port source is proxied to its port; a files source is
+read from disk.</li>
+<li><strong>Frame.</strong> Every response from a source may be framed only by galileo (and
+by the source itself), so apps that refuse frames still show under the bar,
+and no other site can frame them.</li>
+<li><strong>Bridge.</strong> Each HTML page gets the bridge appended as it streams through,
+with its security policy loosened just enough for that one script.</li>
+</ol>
+<p><a href="https://github.com/quirq-ai/galileo/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">docs/ARCHITECTURE.md</a> follows a request through every
+part, with diagrams.</p>
+<h3>Settings</h3>
+<p>From the environment, or <code>.env.local</code> beside this README (see <code>.example.env</code>);
+what the shell sets wins.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PORT</code></td>
+<td><code>4100</code></td>
+<td>where galileo listens, on <code>127.0.0.1</code> only (<code>--port</code> wins)</td>
+</tr>
+<tr>
+<td><code>GALILEO_DATA</code></td>
+<td><code>data/</code></td>
+<td>where galileo keeps its list of sources</td>
+</tr>
+</tbody>
+</table></div>
+<h3>The demo</h3>
+<pre>npm run demo</pre>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Address</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="http://localhost:4100/s/acme/" target="_blank" rel="noopener">http://localhost:4100/s/acme/</a></td>
+<td>Acme Notes, a sample app on a port, which normally refuses to be framed</td>
+</tr>
+<tr>
+<td><a href="http://localhost:4100/s/site/" target="_blank" rel="noopener">http://localhost:4100/s/site/</a></td>
+<td>the same site's folder of files, read only</td>
+</tr>
+<tr>
+<td><a href="http://localhost:4100/s/readme/" target="_blank" rel="noopener">http://localhost:4100/s/readme/</a></td>
+<td>this README, a single file</td>
+</tr>
+<tr>
+<td><a href="http://localhost:4173/" target="_blank" rel="noopener">http://localhost:4173/</a></td>
+<td>Acme Notes as its own server sends it</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Working on galileo</h3>
+<pre>npm test        # node --test: sources, page rules, files, and galileo end to end</pre>
+<p>No dependencies and no build step: plain ESM JavaScript on Node's own modules,
+and plain scripts for telescope. The tests pass a glob to <code>node --test</code>, which
+needs Node 21 or later. <a href="https://github.com/quirq-ai/galileo/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a> has the rules for changing
+galileo, and a map of where each part lives.</p>
+<h3>Docs</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">docs/ARCHITECTURE.md</a></td>
+<td>how it works: a request through every part, with diagrams</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/docs/DECISIONS.md" target="_blank" rel="noopener">docs/DECISIONS.md</a></td>
+<td>why it works that way, and what each choice costs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/docs/REFERENCE.md" target="_blank" rel="noopener">docs/REFERENCE.md</a></td>
+<td>commands, addresses, routes, headers, files, data, limits</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">docs/ROADMAP.md</a></td>
+<td>what v0 leaves out, and what may come next</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/telescope/README.md" target="_blank" rel="noopener">telescope/README.md</a></td>
+<td>telescope: the bar, the router and the bridge</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/galileo/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a></td>
+<td>the contract for agents and people changing galileo</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Limits</h3>
+<ul>
+<li>Safari before macOS 26 can't resolve <code>*.localhost</code>.</li>
+<li>A page's bridge is blocked by a security policy set in a <code>&lt;meta&gt;</code> tag, since
+only headers are adjusted; the bar then doesn't follow that page.</li>
+<li>A link to another site opens in a tab of its own: the frame shows sources
+only.</li>
+<li>More in <a href="https://github.com/quirq-ai/galileo/blob/main/docs/REFERENCE.md#limits" target="_blank" rel="noopener">docs/REFERENCE.md</a>.</li>
+</ul>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>quirq | Outcomes, not hours</title>
+  <meta name="description" content="quirq is a software agency that sells outcomes, not hours: a fixed price for a result, checked item by item and signed off by a named engineer." />
+  <meta property="og:image" content="assets/og.jpg" />
+  <meta name="theme-color" content="#05070b" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Poppins:wght@500;600&family=JetBrains+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-label="Interactive globes. Drag to explore, click a globe to open a section."></canvas>
+  <div class="grid-overlay" aria-hidden="true"></div>
+  <div id="labels" class="labels"></div>
+
+  <!-- ============ NAV ============ -->
+  <header class="nav">
+    <a class="logo" href="#" data-home aria-label="quirq home">
+      <img src="assets/favicon.svg" alt="" width="42" height="42" />
+      <span class="logo-word">quirq</span>
+    </a>
+    <div class="nav-right">
+      <span class="nav-meta"><i class="dot"></i>Open for new builds</span>
+      <a class="btn-cta" href="#" data-book>Book a Call <span aria-hidden="true">&rarr;</span></a>
+    </div>
+  </header>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-eyebrow"><span class="eyebrow-line"></span><span id="hero-eyebrow-text"></span></div>
+    <h1 class="hero-headline" id="hero-title">
+      <span class="hero-lead" id="hero-lead"></span><br />
+      <span class="hero-rotator"><span class="rot-text" id="rot-text"></span><span class="hero-caret" aria-hidden="true"></span></span>
+    </h1>
+    <p class="hero-sub" id="hero-sub"></p>
+    <a class="btn-primary" href="#solutions">See what you can buy</a>
+    <div class="built-for" id="built-for"></div>
+  </section>
+
+  <!-- ============ INTRO CARD ============ -->
+  <button class="intro-card" type="button" data-intro aria-label="Watch the intro">
+    <span class="intro-inner">
+      <span class="intro-art" aria-hidden="true"></span>
+      <span class="intro-copy">
+        <span class="intro-tag">HOW WE WORK</span>
+        <span class="intro-hi">Buy outcomes,</span>
+        <span class="intro-name">not hours.</span>
+        <span class="intro-line">Fixed price. Checked delivery. Signed off.</span>
+      </span>
+      <span class="intro-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" /></svg></span>
+    </span>
+    <span class="intro-pill">WATCH THE INTRO</span>
+  </button>
+
+  <!-- ============ SIDE BITS ============ -->
+  <div class="drag-hint" aria-hidden="true">Drag to explore &middot; Click a globe</div>
+
+  <div class="clients-strip">
+    <div class="trust-pill">
+      <span class="trust-label"><i class="trust-dash"></i><span id="trust-label-text"></span></span>
+      <div class="trust-window"><div class="trust-track" id="trust-track"></div></div>
+    </div>
+  </div>
+
+  <nav class="social-dock" id="social-dock" aria-label="Social links"></nav>
+
+  <!-- ============ PANEL ============ -->
+  <aside class="panel" id="panel" aria-hidden="true">
+    <div class="panel-inner">
+      <div class="panel-list">
+        <header class="panel-header">
+          <button class="close-btn" type="button" data-close aria-label="Close panel">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+          <div class="panel-titlebar">
+            <h2 class="panel-title" id="panel-title"></h2>
+            <span class="panel-count" id="panel-count"></span>
+          </div>
+        </header>
+        <div class="panel-scroll" id="panel-scroll">
+          <div class="panel-intro" id="panel-intro"></div>
+          <div class="cat-tabs" id="cat-tabs"></div>
+          <div class="cards" id="cards"></div>
+        </div>
+      </div>
+      <article class="detail" id="detail"></article>
+    </div>
+  </aside>
+
+  <!-- ============ VIDEO MODAL ============ -->
+  <div class="modal" id="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-close></div>
+    <div class="modal-box">
+      <button class="close-btn modal-close" type="button" data-modal-close aria-label="Close video">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+      <div class="modal-media" id="modal-media"></div>
+    </div>
+  </div>
+
+  <!-- ============ LEAD CHAT ============ -->
+  <button class="chatbot" type="button" id="chatbot" aria-label="Tell us the result you want">
+    <svg class="icon-chat" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h-.5A1 1 0 0 1 4 15z" /></svg>
+    <svg class="icon-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+    <span class="chatbot-badge">1</span>
+  </button>
+
+  <section class="lead-window" id="lead-window" aria-hidden="true" aria-label="Contact form">
+    <header class="lead-header">
+      <span class="lead-avatar"><img src="assets/favicon.svg" alt="" /></span>
+      <span class="lead-header-info">
+        <span class="lead-header-name">quirq</span>
+        <span class="lead-header-sub"><i class="dot"></i>We reply within 24 hours</span>
+      </span>
+      <button class="lead-header-close" type="button" data-lead-close aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+    </header>
+    <form class="lead-body" id="lead-form" novalidate>
+      <div class="lead-step">
+        <p class="lead-intro">What result do you want?</p>
+        <p class="lead-lead">Two quick fields. You get a checklist, a price and a date.</p>
+        <label class="lead-field">
+          <span>Email <em>* required</em></span>
+          <input type="email" name="email" placeholder="you@company.com" autocomplete="email" />
+          <small class="err-text">Add a valid email so we can reply.</small>
+        </label>
+        <label class="lead-field">
+          <span>The result <em>* required</em></span>
+          <textarea name="brief" rows="3" placeholder="Customers can track their orders online"></textarea>
+          <small class="err-text">A sentence or two is plenty.</small>
+        </label>
+        <div class="lead-pills" id="lead-pills"></div>
+        <div class="lead-actions">
+          <button class="lead-btn primary" type="submit">Send <span aria-hidden="true">&rarr;</span></button>
+        </div>
+      </div>
+      <div class="lead-success">
+        <span class="lead-success-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+        <p class="lead-success-title">Your email draft is ready.</p>
+        <p class="lead-success-msg">Hit send in your mail app and we'll get back to you within 24 hours.</p>
+        <button class="lead-restart" type="button" data-lead-restart>Start over</button>
+      </div>
+    </form>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

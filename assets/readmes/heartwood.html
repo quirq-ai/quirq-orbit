@@ -1,0 +1,191 @@
+<p>An old tree, captured as 5.9 million Gaussian splats, that pulses with music. Every heartbeat
+sends a ring of light out from the trunk; tap anywhere to send a ripple and play a note. In the
+Studio you write your own song, part by part, and the tree draws each part as it plays.</p>
+<p><strong>Live:</strong> <a href="https://liftoff-7-xo-sscay4t.apps.hello-xo.nl" target="_blank" rel="noopener">https://liftoff-7-xo-sscay4t.apps.hello-xo.nl</a></p>
+<p><a href="https://github.com/quirq-ai/heartwood/blob/main/public/og.jpg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/heartwood/main/public/og.jpg" alt="Heartwood at dusk: the old tree with a ring of light at its base" loading="lazy"></a></p>
+<p>Scene: <a href="https://superspl.at/scene/6a8be890" target="_blank" rel="noopener">“tree_360_8-1”</a> by
+<a href="https://superspl.at/user/wanghongtao" target="_blank" rel="noopener">wanghongtao</a>, licensed
+<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Modified here with audio-reactive
+effects and generated music. Keep the credit visible wherever this is published.</p>
+<h3>Run</h3>
+<pre><code>npm install
+npm run dev        # http://127.0.0.1:5262
+</code></pre>
+<p><code>npm run build</code> writes a static site to <code>dist/</code>, and <code>npm run preview</code> serves it on port 5263.
+The build uses relative paths, so <code>dist/</code> can be uploaded to any static host or sub-folder
+(Vercel, Netlify, GitHub Pages, an nginx container). Nothing runs on a server.</p>
+<p><code>og:url</code> and <code>og:image</code> in <code>index.html</code> point at the live site; change them if you host it
+elsewhere, since link previews need an absolute image URL.</p>
+<h4>Docker</h4>
+<p>The <code>Dockerfile</code> builds the site from source and serves it with Caddy on port 3000
+(<code>deploy/Caddyfile</code>: compression, long caching for the hashed files). The live site runs this
+image.</p>
+<pre><code>docker build -t heartwood .
+docker run --rm -p 127.0.0.1:8080:3000 heartwood    # http://127.0.0.1:8080
+</code></pre>
+<p>The splats stream at runtime from PlayCanvas's CDN, which allows any origin. To serve them from
+your own host instead, run <code>node scripts/fetch-scene.mjs</code> (about 126 MB into <code>public/scene/</code>) and
+set <code>SCENE.url</code> in <code>src/config.js</code> to <code>'scene/lod-meta.json'</code>.</p>
+<h3>Play</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Drag</td>
+<td>Orbit (drifts on its own when left alone)</td>
+</tr>
+<tr>
+<td>Right-drag, two fingers</td>
+<td>Pan</td>
+</tr>
+<tr>
+<td>Scroll, pinch</td>
+<td>Zoom</td>
+</tr>
+<tr>
+<td>Tap</td>
+<td>Ripple of light from that point, and a note</td>
+</tr>
+<tr>
+<td>Double-tap</td>
+<td>Move the heart (where beat rings start) there</td>
+</tr>
+<tr>
+<td>Space</td>
+<td>Play / pause</td>
+</tr>
+<tr>
+<td>1-4</td>
+<td>Colour: Ember, Aurora, Blossom, Moon</td>
+</tr>
+<tr>
+<td>P / R / H / O / F</td>
+<td>Pulse / reset view / hide UI / auto orbit / fullscreen</td>
+</tr>
+</tbody>
+</table></div>
+<p>The dock picks the music: three generated moods (Heart 64 bpm, Bloom 116 bpm, Drift ambient),
+a track of your own (button, or drop a file anywhere), or the microphone. Pulse sets how strong
+the effects are, Dusk grades the scene toward night so the light carries.</p>
+<p>URL options: <code>?renderer=webgl</code> forces WebGL 2 (WebGPU is used when available), <code>?debug</code> shows
+frame stats, <code>?src=&lt;lod-meta.json | .sog | .ply url&gt;&amp;heart=x,y,z</code> loads another SuperSplat scene.</p>
+<h3>Studio</h3>
+<p><strong>Studio</strong> in the dock opens a step sequencer for the song the tree plays: chords, melody, bass,
+heart (the kick), clap and hats. Each part is one bar of 16 steps, looped under four bars of
+chords. The melody's rows are the key's pentatonic scale and the bass's rows are tones of each
+bar's chord, so every square is in key, and changing the key or a chord carries the song with it.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tap a square, or drag</td>
+<td>Write or clear notes; drum squares go full, soft, off</td>
+</tr>
+<tr>
+<td>A part's name</td>
+<td>Mute it</td>
+</tr>
+<tr>
+<td>A part's dice</td>
+<td>A new pattern for that part</td>
+</tr>
+<tr>
+<td>A chord</td>
+<td>The next chord (right-click: the one before)</td>
+</tr>
+<tr>
+<td>Dice at the top</td>
+<td>A new song: Surprise me, Heart, Bloom, Drift or Blank</td>
+</tr>
+<tr>
+<td>Pencil</td>
+<td>Write the notes you play live into the melody</td>
+</tr>
+<tr>
+<td>Tap the tree, Z, ,</td>
+<td>Play the melody's notes live, in key</td>
+</tr>
+<tr>
+<td>●</td>
+<td>Record what plays; press again to save it as an audio file</td>
+</tr>
+<tr>
+<td>Link</td>
+<td>Copy a link that opens this song (<code>#s=</code> and 56 characters)</td>
+</tr>
+<tr>
+<td>Ctrl+Z, Ctrl+Shift+Z</td>
+<td>Undo, redo</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each part lights the tree its own way. The heart sends rings along the ground; the bass sends
+slower, wider rings in the palette's second colour; each chord a slow swell. The melody lights
+points on an upright sheet through the trunk: left to right through the bar, higher notes higher
+up. Hats sparkle and claps flash. The song is kept in the browser between visits.</p>
+<h3>How it works</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/scene.js</code></td>
+<td>PlayCanvas app, camera with bloom and vignette, streaming the splat (coarsest level first), picking</td>
+</tr>
+<tr>
+<td><code>src/pulse.js</code></td>
+<td>The effect: one <code>gsplatModifyVS</code> shader chunk (GLSL for WebGL 2, WGSL for WebGPU) that moves, scales and lights every splat from the music: rings, sway, sparkle, dusk, reveal. It also fades out leaves close to the lens, never the ground</td>
+</tr>
+<tr>
+<td><code>src/music.js</code></td>
+<td>Generative score on the Web Audio API: heartbeat kick, sub bass, pads, FM plucks and bells, with every note reported on the audio clock</td>
+</tr>
+<tr>
+<td><code>src/audio.js</code></td>
+<td>Sources (score, studio song, your track, microphone), analysis into bass / mid / high, beat detection for tracks without a score, recording</td>
+</tr>
+<tr>
+<td><code>src/song.js</code></td>
+<td>Studio songs: keys, scales and chords, the three moods as songs, a generator for each part, 56-character share codes</td>
+</tr>
+<tr>
+<td><code>src/sequencer.js</code></td>
+<td>Plays a studio song on the score's instruments, reporting each note's part, step and row</td>
+</tr>
+<tr>
+<td><code>src/studio.js</code></td>
+<td>The studio panel: the grid, painting, chords, key and new-song menus, the playhead</td>
+</tr>
+<tr>
+<td><code>src/orbit.js</code></td>
+<td>Orbit camera: damped, flick inertia, a slow drift that dips under the low branches on the far side, and how much to clear around the lens</td>
+</tr>
+<tr>
+<td><code>src/ui.js</code>, <code>index.html</code>, <code>src/style.css</code></td>
+<td>Intro, dock, about card, drag and drop</td>
+</tr>
+<tr>
+<td><code>src/main.js</code></td>
+<td>Wires music events to light, taps to ripples, keys, and a quality governor for slow devices</td>
+</tr>
+</tbody>
+</table></div>
+<p>Rendering: <a href="https://github.com/playcanvas/engine" target="_blank" rel="noopener">PlayCanvas engine</a> 2.24 (MIT).</p>
+<h3>Licence</h3>
+<p>The code is MIT (<a href="https://github.com/quirq-ai/heartwood/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>). The scene is not in this repository: it streams from
+PlayCanvas's CDN and stays under CC BY 4.0, by wanghongtao. <code>public/og.jpg</code> is a frame rendered
+from it, so the same credit applies to that image.</p>

@@ -1,0 +1,309 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo moves
+builds through channels. A channel is a pointer: <code>channels/&lt;name&gt;</code> names a commit and an artifact
+digest, and only the release executor moves it, recording an operation key before it does.</p>
+<ul>
+<li><code>lkgr</code> (last known good): the newest <code>main</code> commit whose required post-submit builders are all
+green. Channels are cut from it.</li>
+<li><code>canary</code>: built and shipped daily by agents alone, to quirq's research and test environments only.
+In v0 the canary starts on a CI runner; canary test machines are not set up yet.</li>
+<li><code>dev</code> (declared, off in v0) and <code>stable</code> (suraj promotes; low priority, v2).</li>
+</ul>
+<p><strong>Chromium counterpart:</strong> V8's lkgr finder and release scripts, and LUCI's <code>promote.py</code>.</p>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>Rules it lives by</h3>
+<ul>
+<li>Rules come from infra-config's <code>channels.toml</code> and <code>health.toml</code>, read through infra-config's <code>qqcfg</code> (via the gardener's pinned reader) at the
+commit pinned in <code>pins.toml</code>. Changing them is a policy change for suraj.</li>
+<li>Record an operation key before every external effect, so a retry never acts twice.</li>
+<li>A missing signal means hold, never promote.</li>
+<li>Schedules can be dropped: run off the hour, with a watchdog for missed runs.</li>
+<li>GitHub-specific code sits behind the <code>backend</code> field (<code>github</code> now, <code>launchpad</code> later).</li>
+</ul>
+<h3>lkgr (V0-REL-01)</h3>
+<p><code>lkgr</code> is the newest main commit whose required post-submit builders are all green. "Required" and
+"green" are the gardener's definitions, read through <code>qqgarden</code> at a pinned commit: the repo's
+<code>postsubmit</code> builders triggered by <code>land</code> in infra-config <code>pipelines.toml</code>, and per builder and commit
+the newest run's newest attempt. Pending, missing and cancelled are not green, so a missing signal
+holds <code>lkgr</code> where it is. It moves forward along main only, except that if a re-run turns its own
+commit red it moves back to the newest all-green commit: it never names a red commit.</p>
+<pre>qqrelease lkgr --config &lt;infra-config checkout&gt; --state &lt;state dir&gt; [--publish] [--dry-run]
+qqrelease lkgr --config ... --state ... --backend local --target-root DIR --snapshot SNAP.json   # offline</pre>
+<p>The <code>lkgr</code> workflow runs it every 10 minutes, off the hour. Each move is an operation of the release
+executor (below). <code>tools/lkgr_demo.py</code> replays a growing main with late, red and re-run verdicts
+against local repos and checks <code>lkgr</code> moves on its own and is never red; presubmit runs it.</p>
+<h3>The release executor and its record</h3>
+<p>Only the executor moves <code>lkgr</code> and <code>channels/*</code>. Every move is an <strong>operation</strong>: its key hashes the
+intent (repo, ref, from, to, digest) and the pointer's generation, and is committed and pushed to
+this repo's <code>release-state</code> branch <strong>before</strong> anything else changes. Then the target repo's git ref
+moves (compare-and-swap: it refuses if something else moved it), then the new pointer and the
+applied operation are recorded together. A retry with the same intent is a no-op. Until its
+result is recorded the pointer names the operation as <code>pending</code>, and every run settles a pending
+operation before planning a new one. Settling reads the target ref and never writes it: if the
+write landed (a run died after it, or timed out on it) the operation is applied; if it did not, the
+operation is abandoned and the move is planned again from fresh verdicts, so a stale move to a
+commit that has since turned red is never made. The one case lkgr cannot fix alone is <code>stuck</code>: its
+commit turned red and no listed commit is green; it stays put and the workflow fails loudly.</p>
+<pre><code>release-state branch
+  pointers/&lt;repo&gt;/&lt;ref&gt;.json   what lkgr and each channel name (schema qq-pointer/1), with history
+  ops/&lt;key&gt;.json               every operation: recorded, applied or failed (schema qq-operation/1)
+</code></pre>
+<p>On GitHub the ref is the branch <code>&lt;ref&gt;</code> in the target repo (<code>lkgr</code>, <code>channels/canary</code>), written
+with the executor's App token (<code>QQ_RELEASE_TOKEN</code>). gate's <code>qq-release-refs</code> rulesets let only
+that identity write them. <strong>TODO(suraj):</strong> the App (<code>quirq-release-executor</code>) exists, but release
+does not act as it yet: its token is not set up for these jobs. Until it is, the ref
+write is skipped and the operation records <code>skipped: no release executor identity</code>; the pointer
+still moves in <code>release-state</code>, which is the record readers use. The pointer remembers that the
+ref was not written (<code>mirrored: false</code>), so the first write after release acts as the App creates the
+ref instead of refusing it as moved by someone else.</p>
+<p><code>release-state</code> is the trust root the installer reads, and today it is only as safe as push access
+to this repo. Executor jobs refuse to run from any branch but <code>main</code>, which stops a dispatch from a
+branch by accident, but anyone who can push a branch can change that check.</p>
+<p>The five jobs that push <code>release-state</code> (lkgr, canary <code>finish</code> and <code>report</code>, channel-rollback,
+canary-release-hold) run in the <code>release-executor</code> environment, meant to hold the App's key
+(<code>QQ_RELEASE_PRIVATE_KEY</code>) as its only secret and to be usable from <code>main</code> only, so that a workflow on
+another branch cannot mint the App's token. They check out with <code>persist-credentials: false</code>; the
+executor action then installs exactly one push credential: the App's token for this repo alone when
+<code>QQ_RELEASE_CLIENT_ID</code> is set, else the job's <code>GITHUB_TOKEN</code>, and checks from <code>.qq/state</code> that git
+has no other Authorization header, credential helper, URL rewrite or push URL for it. The token
+stays in git config for the rest of the job (as <code>GITHUB_TOKEN</code> does today), which is acceptable
+only because writer jobs run <code>main</code>'s code; the App token is revoked at job end. The job log says
+which identity pushes: <code>release-state pushes as &lt;app&gt;[bot]</code>, or a warning naming
+<code>github-actions[bot]</code>. <strong>TODO(suraj):</strong> the App exists; what remains is the gate settings run that
+gives the <code>qq-release-refs</code> rulesets the App's bypass (gate #26 and #28, merged but not applied),
+then "command 2", which sets <code>QQ_RELEASE_CLIENT_ID</code> here so these jobs act as the App (it stops
+until those rulesets carry the bypass), and then the ruleset on <code>release-state</code> whose only bypass
+is the App (open gate PR #27). <code>release-executor</code> must allow only <code>main</code> (its deployment branch
+policy).
+Until then any workflow here can still push the branch, and the installer should also check that
+<code>generation</code> never goes down.</p>
+<h3>Channels and rollback (V0-REL-02)</h3>
+<p>Channels and their order come from infra-config <code>channels.toml</code>; which channels a repo ships on,
+from <code>repos.toml</code>. A channel's pointer <code>channels/&lt;name&gt;</code> names a commit <strong>and</strong> the digest
+(<code>sha256:...</code>) of the artifact built from it.</p>
+<pre>qqrelease channel promote  --config ... --state ... --repo NAME --channel canary --commit SHA --digest sha256:...
+qqrelease channel rollback --config ... --state ... --repo NAME --channel canary --reason "..." --from COMMIT
+qqrelease channel show     --state ...
+qq channel rollback ...    # the same command in depot's qq (entry point qq.commands)</pre>
+<ul>
+<li><code>promote</code> only accepts the commit the channel's source names now: canary takes <code>lkgr</code>'s, dev
+takes canary's. The daily canary pipeline (V0-REL-03) is what calls it.</li>
+<li><code>rollback</code> points the channel at the newest earlier commit and digest from the pointer's history
+that it was never rolled back from. Nothing is rebuilt. The value it moves away from is recorded
+as rolled back: a second rollback goes further back, never forward, and a promotion never ships it
+again. Retrying a rollback whose write already landed does nothing more. <code>--from</code> is required: the
+full commit the channel names now, so a re-run or a second dispatch is refused instead of rolling
+back twice. The <code>channel-rollback</code> workflow runs it on demand.</li>
+<li>A promotion that changes nothing is refused. When a channel takes its build from another channel
+(dev from canary), it takes that channel's digest too, so only a vetted artifact moves on.</li>
+<li>v0 promotes only channels whose <code>channels.toml</code> rules need no person and no signal it cannot read
+yet (canary). A channel that needs an approval, a soak or health signals (dev, stable) is refused,
+and so is a rollback whose <code>[channel.rollback]</code> needs an approval: held, never done unchecked.</li>
+<li>After every move, <code>channels.json</code> on <code>release-state</code> (schema <code>qq-channels/1</code>) says what each
+repo's channels name: commit, digest, generation, operation and time. The installer reads it
+(V0-INS-01). Read it from
+<code>https://raw.githubusercontent.com/quirq-ai/release/refs/heads/release-state/channels.json</code>: the
+<code>refs/heads/</code> form means a tag named <code>release-state</code> can never be served instead. The installer's
+default source uses this form too.</li>
+</ul>
+<p><code>tools/rollback_drill.py</code> ships two canaries per repo through the executor, rolls back, and checks
+that the ref, the pointer and <code>channels.json</code> all name the previous canary again, within 10
+minutes. Presubmit runs it on every change.</p>
+<h3>The daily canary (V0-REL-03)</h3>
+<p>The <code>canary</code> workflow runs daily at the canary schedule in infra-config <code>channels.toml</code> (off the
+hour), for every repo with a canary release builder in <code>pipelines.toml</code>. Stages, in order; the
+first failure holds the canary and the previous one stays in place:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>select</td>
+<td>lkgr's commit. Already the canary, held before, or no lkgr yet: a recorded no-op</td>
+<td><code>plan</code> job</td>
+</tr>
+<tr>
+<td>build</td>
+<td>every target through its adapter (recipes, pinned); the artifact digest names the build actions and their outputs</td>
+<td><code>stages</code> job, read-only</td>
+</tr>
+<tr>
+<td>verify</td>
+<td>the full test suites</td>
+<td><code>stages</code></td>
+</tr>
+<tr>
+<td>fuzz smoke</td>
+<td>property tests only (until V1-REL-02 adds fuzzers): the suites again with 1,000 examples and a daily seed</td>
+<td><code>stages</code></td>
+</tr>
+<tr>
+<td>deploy, probe</td>
+<td>start the artifact in the canary test environment (recipes' deploy; in v0 the runner) and probe it. Every <code>health.toml</code> probe for the repo must have run and passed: a probe that did not run is a missing signal, so the canary is held</td>
+<td><code>stages</code></td>
+</tr>
+<tr>
+<td>promote</td>
+<td>the executor moves <code>channels/canary</code> to the commit and digest, recording the operation key first</td>
+<td><code>finish</code> job, under the <code>release-channels</code> lock</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every run leaves <code>canary/&lt;repo&gt;/runs/&lt;date&gt;.json</code> (schema <code>qq-canary-run/1</code>) on <code>release-state</code>, and
+a held commit leaves <code>canary/&lt;repo&gt;/held/&lt;commit&gt;.json</code> so it is not retried; the next canary
+waits for lkgr to move, or for the hold to be released (below). Each held canary gets a failure record mirrored to a <code>qq-failure</code> issue
+(test-pipelines' <code>failure</code> action, V0-TST-04) and a postmortem draft issue labelled <code>postmortem</code>
+from infra-config's template (trigger <code>canary-deploy-failed</code>); v0 fills it from captured evidence,
+and an agent completes it in v1. Stage results go to the results store through the sink (run kind
+<code>canary</code>).</p>
+<p>Only a stage's verdict holds a commit. <code>finish</code> recomputes it from the stage results itself (all four
+stages, in order, passing, with a <code>sha256:</code> digest), since the worker runs product code. When the
+pipeline itself fails (a lost worker, missing or incomplete results, a stage whose adapter could not
+run: a timeout, a crash, no results, judged by exit codes alone; a promote that could not be
+written), the outcome is <code>error</code>: nothing is held, the job goes red, and the day counts as not yet
+run. The day's verdict stays on top of its record (a hold always does) and later runs are kept under <code>later</code>;
+rerunning <code>finish</code> after a ship records the ship again, never a hold.</p>
+<p>An action that could not start on the machine is <code>error</code> too: exit 126 or 127 (the runner records
+127 when a command is missing), or the adapter's <code>fetch:toolchain-check</code> failing (the machine lacks
+the pinned toolchain). These are exit codes and action names qqrecipes writes, never output text.
+Product code can exit 126 or 127 too, so an error is never final: a commit the canary could not
+judge in 3 canary runs since its last release (a re-run of the same run's finish counts once) (<code>ERROR_LIMIT</code>; about a day of the schedule plus the
+watchdog) is held, tagged <code>possible runner fault</code>, with a failure record and a postmortem draft like
+any hold. Until then it is rerun; a flaky failure can still ship on a green rerun within those 3.
+The same cap ends the loop for a commit that breaks its own <code>infra/repo.toml</code> (qqrecipes stops
+before writing results), for stage results of any malformed shape, and for a lost worker. So a
+runner outage of about a day (or three cancelled canary runs) holds every canary repo's current
+lkgr commit as a possible runner fault, each with its own failure issue: nothing ships, and each
+repo recovers when lkgr moves or its hold is released. A promote that fails after every stage
+passed is not counted: the commit is not in doubt, the executor is.</p>
+<p>A machine fault that looks like an ordinary failing action is held too. Once the machine is fixed,
+release the hold with the <code>canary-release-hold</code> workflow (repo, full held commit, <code>released_before</code>,
+reason), which runs <code>qqrelease canary release-hold</code>. <code>released_before</code> names the hold: the number of
+entries in the hold record's <code>releases</code> (0 for the commit's first hold). From main only, it records
+a <code>release-hold</code> operation, keyed on the release before it, and marks the hold record released in one
+release-state commit, with the run and who dispatched it; the next canary builds the commit again.
+A retried dispatch is a no-op, and re-running a finished release after the commit was held again is
+refused, so each hold needs its own release. (Releases recorded before this chaining, at
+<code>cd88d72</code>, are not chained and are refused as hand edits; release-state had no canary records then.) The reason is one line of at most 500 characters. Close the
+hold's failure issue by hand with what was wrong with the machine.</p>
+<p>GitHub may drop a scheduled run, so <code>canary-watchdog</code> checks twice a day that every canary repo has
+a verdict or no-op for today and, if one is missing and no canary is in flight, starts <code>canary</code> by hand.
+GitHub often skips scheduled runs on these quiet repos, the watchdog's own included, so a daily
+backstop routine at 07:37 UTC, run outside these repos, dispatches <code>lkgr</code> and then <code>canary-watchdog</code>.</p>
+<p><code>tests/canary_demo.py</code> plays eight days against a fixture service (<code>tests/fixtures/canary_app</code>): seven
+ship with no human touch, and a planted bad canary (its <code>/health</code> answers 500) is held at
+deploy-probe with the previous canary kept. Presubmit runs it.</p>
+<p>xo-space and innernet have <code>infra/repo.toml</code> and an lkgr on <code>release-state</code> since 2026-10-04. The
+first canary was started by hand on 2026-10-05 and shipped both repos; <code>release-state</code> has a
+record for each day since. Not yet done: 7 daily canaries in a row with no human touch, a held
+canary of a real repo, and a rollback drill on a real repo. website has no canary builder (no
+channels in <code>repos.toml</code>), so it is not in the canary.</p>
+<h3>The daily canary report (V0-REL-04)</h3>
+<p>After each day's canary, the <code>report</code> job files one issue, <code>Canary report &lt;date&gt;</code>, labelled
+<code>canary-report</code> (a rerun the same day edits it): what shipped, what was held and why, what was a
+no-op or did not run, what canary names now, and the open failure records (<code>qq-failure</code> issues). The
+same text is kept on <code>release-state</code> as <code>reports/&lt;date&gt;.md</code>. <code>qqrelease canary report</code> builds it; the
+canary demo checks a report exists for every day and that the bad day's says held.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-REL-01</td>
+<td><code>lkgr</code> ref</td>
+<td>#2</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-REL-02</td>
+<td>Channel pointers and rollback</td>
+<td>#3</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-REL-03</td>
+<td>Daily canary pipeline v0</td>
+<td>#4</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-REL-04</td>
+<td>Daily canary report</td>
+<td>#6</td>
+<td>merged</td>
+</tr>
+</tbody>
+</table></div>
+<p>Audit fixes after v0: B1 (#8), S1-S3 (#9), S4 (#10), S5-S6 (#11), S7-S8 (#12); audits cleared at
+<code>71a987f</code>.</p>
+<p>Out of scope for v0: soak, automatic rollback, the fuzz stage, the dev channel and PostHog (v1);
+stable and staged rollout (v2).</p>
+<h4>Open for v1 (non-blocking findings from the v0 audits and reviews)</h4>
+<p>Waiting on the release executor identity and the <code>release-state</code> ruleset (suraj). The App
+<code>quirq-release-executor</code> exists, but until "command 2" runs, the executor jobs push with
+<code>GITHUB_TOKEN</code> and release-state records <code>skipped: no release executor identity</code>:</p>
+<ul>
+<li>The release chain is a consistency check, not authentication, and <code>is_held</code> trusts <code>state</code> alone.</li>
+<li>A rebase after an admin force-push of <code>release-state</code> could replay commits the rewind removed; the
+ruleset's no-force-push rule closes it.</li>
+</ul>
+<p>The state store:</p>
+<ul>
+<li>A push refused for a reason other than a race is retried 4 times as if it were one, and the error
+does not say it was not one.</li>
+<li><code>_reset_to_branch</code> falls back to <code>HEAD~1</code> when the fetch fails: silent on a root commit, and a
+publish that landed is then reported as failed (the safe side).</li>
+<li><code>save</code> writes files before <code>git add</code>/<code>commit</code>, outside the reset; a failure there leaves the
+worktree dirty for later reads in the same process.</li>
+<li>The compare-and-swap covers writes only: an input a writer only reads (the error count's
+generation, from the hold record) can be stale. Harmless today.</li>
+<li>A non-UTF-8 path from another writer refuses racing publishes within the race window.</li>
+</ul>
+<p>The canary:</p>
+<ul>
+<li>The <code>finish</code> fallback with no stage results, after a promote that landed, records <code>error</code> and
+counts it; nothing ships, but the day reads error instead of shipped.</li>
+<li>A promote bug that fails every run turns the job red daily with no cap or escalation.</li>
+<li>A forged <code>skip</code> gives an uncounted daily no-op (the accepted worker-trust model), and every repo's
+stage results share one artifact namespace within a run.</li>
+<li>About a day of runner outage holds every canary repo as a possible runner fault (documented above).</li>
+<li>A release reason keeps non-whitespace control characters.</li>
+<li>Held and report issue bodies can exceed GitHub's 65,536-character limit.</li>
+<li>The <code>earlier</code>/<code>later</code> cap reuses <code>RUN_IDS_KEPT</code>; give it its own constant.</li>
+</ul>
+<p>The release executor App:</p>
+<ul>
+<li>No test yet that <code>qqrelease repos</code> at the pinned infra-config names no repo outside the App's
+install list (release, innernet, xo-space, website).</li>
+<li>The no-hooks lint reads the action's <code>run:</code> blocks only, not the <code>.sh</code> files they call.</li>
+<li><code>finish</code> reads the stages' artifacts, which product code wrote, while it holds the push credential.</li>
+<li>The push credential check ignores transport settings (<code>http.*.proxy</code>, <code>sslVerify</code>,
+<code>curloptResolve</code>, <code>cookieFile</code>, <code>remote.origin.proxy</code>).</li>
+<li>Nothing checks at run time that the installed qq packages are the pinned commits; presubmit checks
+what <code>pyproject.toml</code> resolves.</li>
+<li>The build lint checks that install.sh's <code>rm -rf build</code> line exists, not that it runs.</li>
+<li>An extra empty origin <code>url</code> or <code>pushurl</code> value slips the one-URL count (<code>$(...)</code> drops the trailing
+blank line; count with <code>wc -l</code> outside it). Inert today.</li>
+<li>No test for an unset or empty <code>GITHUB_SERVER_URL</code>/<code>GITHUB_REPOSITORY</code> (the check fails closed).</li>
+<li><code>.gitignore</code> has <code>build/</code>; it should be <code>/build/</code>.</li>
+<li>A stage job's leftover process could still write another repo's directory into its stage
+artifact between the copy and the upload; <code>finish</code> merges every artifact, so it would overwrite
+that repo's result. Take each repo's file only from the artifact named after it.</li>
+</ul>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/release/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks as CI does: clone infra-config at the <code>pins.toml</code> commit into
+<code>.qq/infra-config</code>, then <code>python -m pip install -e ".[test]" &amp;&amp; python -m pytest</code>.</p>
+<h3>Licence</h3>
+<p>Apache-2.0; see <a href="https://github.com/quirq-ai/release/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

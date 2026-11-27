@@ -1,0 +1,129 @@
+<p><strong>Your command-line tools, in one local workspace.</strong></p>
+<p>cli console turns installed CLIs into a browser interface: command families in the sidebar, subcommands across the top, flags as forms, and real output from your machine. Pick a tool and its console is generated on demand from local help or man pages. No hand-maintained command catalog or AI key is required.</p>
+<h3>What it does</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tool discovery</td>
+<td>Search executable programs already available on your <code>PATH</code>.</td>
+</tr>
+<tr>
+<td>Generated consoles</td>
+<td>Extract command families, subcommands, options, and descriptions from local references.</td>
+</tr>
+<tr>
+<td>Nested navigation</td>
+<td>Collect deeper command help as you open it.</td>
+</tr>
+<tr>
+<td>Command builder</td>
+<td>Edit flag fields, positional arguments, standard input, and working directory with a live preview.</td>
+</tr>
+<tr>
+<td>Local execution</td>
+<td>Review an immutable preview, then explicitly confirm the process you want to run.</td>
+</tr>
+<tr>
+<td>Results</td>
+<td>Inspect structured JSON, tables, raw stdout, stderr, duration, and exit status.</td>
+</tr>
+<tr>
+<td>History and cancellation</td>
+<td>Reopen recent results or stop a running local process.</td>
+</tr>
+<tr>
+<td>Reference import</td>
+<td>Generate a command builder from pasted help when a local reference is unavailable.</td>
+</tr>
+<tr>
+<td>Optional AI enrichment</td>
+<td>Improve titles and descriptions without allowing AI to change commands or authorize execution.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Quick start</h3>
+<p>Requires <strong>Node.js 22 or later</strong>, npm, and the CLI tools you want to use on <code>PATH</code>. Tested on macOS; the application is intended for a local macOS or Linux environment.</p>
+<pre>git clone https://github.com/quirq-ai/cli-console.git
+cd cli-console
+npm ci
+npm run dev</pre>
+<p>Open <a href="http://127.0.0.1:4320" target="_blank" rel="noopener">http://127.0.0.1:4320</a>. Keep the server running while using the console.</p>
+<p>For an optimized production build:</p>
+<pre>npm run build
+npm start</pre>
+<p>Both commands bind the app to loopback. The Next.js server runs on the same machine as your CLIs and uses their existing local configuration and authentication.</p>
+<h3>Using the console</h3>
+<ol>
+<li>Open the tool picker above the sidebar and choose an installed program.</li>
+<li>Select a command family, then a subcommand. Missing references are collected and cached as you navigate.</li>
+<li>Fill the documented flag fields. Put each positional argument on its own line; spaces inside a line remain part of that argument.</li>
+<li>Set an existing absolute working directory. Optionally provide standard input.</li>
+<li>Choose <strong>Review &amp; run</strong>, inspect the exact command and directory, then choose <strong>Confirm and run</strong>.</li>
+<li>View results in <strong>Output</strong>, <strong>Raw</strong>, or <strong>Stderr</strong>. Use <strong>History</strong> to reopen a run, or <strong>Stop command</strong> to cancel an active process.</li>
+</ol>
+<p>When <code>gh</code> is installed, the initial view opens <code>gh pr list</code>. It does not execute the command automatically. Set the working directory to a checkout or use gh's repository flag before running repository commands.</p>
+<p>Interactive programs and recognized credential or script-running operations provide a copyable command for your terminal.</p>
+<h3>How generation works</h3>
+<pre><code>Installed programs on PATH
+         ↓
+Local CLI help or man page
+         ↓
+Parsed and validated command schema
+         ↓
+Cached reference → React command workspace
+         ↓
+Reviewed preview → local process → results
+</code></pre>
+<p>The parser supports common Cobra, argparse, Click/clap-style command tables, npm inventories, pnpm command groups, and man-page option blocks. It collects a selected command's reference instead of traversing every installed tool at startup.</p>
+<p>Common tools with known help conventions are probed through help arguments. Other programs are read through local man pages without starting the program: some utilities interpret <code>--help</code> as a filename or action.</p>
+<p>Generated references live in the ignored <code>.cache/catalog/</code> directory. The cache invalidates when the executable path, modification time, or size changes. <strong>Regenerate</strong> explicitly refreshes the current reference. The cache can be deleted while the server is stopped.</p>
+<p>If a reference is missing or has an unsupported format, use <strong>Import reference</strong> to paste help or man text. Imported references produce forms and a terminal handoff until live help can verify the command.</p>
+<h3>Optional AI enrichment</h3>
+<p>The app works entirely through local parsing by default. To improve generated titles and descriptions:</p>
+<pre>cp .env.example .env.local</pre>
+<p>Set the following values in <code>.env.local</code>, then restart the server:</p>
+<pre>AI_GATEWAY_API_KEY=your-gateway-key
+AI_MODEL=provider/model</pre>
+<p>Choose a model available through <a href="https://vercel.com/docs/ai-gateway" target="_blank" rel="noopener">Vercel AI Gateway</a>. Selected help text is sent to the model, which returns two validated text fields. AI cannot add command names, change flags, generate executable UI code, or approve a run. If enrichment fails, the parser still supplies the console. The AI Gateway key is excluded from spawned CLI environments.</p>
+<h3>Execution limits</h3>
+<p>This is a <strong>local, single-user command runner</strong>. A confirmed command can modify local files or remote services through your CLI's existing permissions.</p>
+<ul>
+<li>Every run needs an explicitly confirmed preview. Previews expire after two minutes and can be consumed once.</li>
+<li>Processes receive argument arrays and run without a shell. Flag fields must match the selected reference; positional arguments cannot introduce extra options.</li>
+<li>The API checks loopback hosts, request origins, fetch-site headers, and JSON body size.</li>
+<li>Up to four processes run concurrently. Each run is limited to two minutes and 512 KiB of captured output.</li>
+<li>Cancellation stops the local process group. It does not undo completed work or necessarily cancel a remote operation.</li>
+<li>The last 30 runs are kept in server memory. History disappears when the server stops.</li>
+<li>Recognized interpreters, project-script runners, credential operations, and interactive commands use a terminal handoff. Interactive behavior cannot be detected perfectly for arbitrary programs.</li>
+</ul>
+<p>Deploying the frontend to Vercel alone will not give it access to CLIs on your laptop. Hosted access would require a separately authenticated local agent.</p>
+<h3>Current limitations</h3>
+<p>Help formats are not universal, so extraction is not exhaustive for every CLI. Repeated flags, bare optional-value flags, mutually exclusive arguments, and shell pipelines are not modeled. Consult the displayed source reference and use your terminal for those cases. Windows support has not been verified.</p>
+<h3>Development</h3>
+<p>Built with Next.js App Router, React, TypeScript, Zod, and the Vercel AI SDK. Help collection and execution use Node.js child processes.</p>
+<pre><code>src/app/                  App shell, styles, and Next.js entry points
+src/app/api/console/      Local API for discovery, generation, previews, and runs
+src/components/           Generated command interface
+src/lib/catalog.ts        PATH inventory, help collection, enrichment, and cache
+src/lib/parser.ts         Reference parsing and command argument construction
+src/lib/runner.ts         Immutable previews, execution, cancellation, and history
+src/lib/boundary.ts        Loopback and HTTP request checks
+src/lib/schema.ts          Shared validated command schema
+src/lib/process.ts         Bounded help collection and CLI environment
+test/                     Parser, boundary, runner, and integration checks
+</code></pre>
+<p>Run the checks:</p>
+<pre>npm test
+npm run typecheck
+npm run build
+git diff --check</pre>
+<p>The integration tests also require <strong>Git, GitHub CLI (<code>gh</code>), and pnpm</strong> on <code>PATH</code>; no GitHub login is needed to collect help. Tests cover parsing, cache reuse, optional-value syntax, argument boundaries, request checks, preview confirmation and replay prevention, terminal handoffs, cancellation, and help timeout/output limits. Unknown executables are checked to ensure discovery never starts them.</p>
+<p>Validated on 2026-10-14: all 15 tests, TypeScript checks, and the production build passed. Browser verification covered generated gh navigation, Git man-page forms, a confirmed read-only Git status run, first-use curl generation, and layouts at 390, 768, and 1440 pixels. Optional AI enrichment was not exercised without a configured key.</p>
+<h3>License</h3>
+<p><a href="https://github.com/quirq-ai/cli-console/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>.</p>

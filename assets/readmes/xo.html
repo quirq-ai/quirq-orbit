@@ -1,0 +1,361 @@
+<p><code>xo</code> is the command line for the <a href="https://dev.xo.builders" target="_blank" rel="noopener">XO Cloud</a> core API. Every endpoint is a
+command, and xo sends your XO API key on each request without ever printing it.</p>
+<p>It follows the shape of quirq's own tools (<code>qq fetch</code>, <code>qqsync</code>): one Python package, one
+argparse command, standard library only, Apache-2.0. Unlike them the command is plain <code>xo</code>.</p>
+<h3>Install</h3>
+<p>For a step-by-step setup on your own Mac or Linux machine, see <a href="https://github.com/quirq-ai/xo/blob/main/docs/quickstart.md" target="_blank" rel="noopener">docs/quickstart.md</a>; for every command and how to test them, the <a href="https://github.com/quirq-ai/xo/blob/main/docs/guide.md" target="_blank" rel="noopener">user guide</a>.</p>
+<pre>pip install "quirq-xo @ git+https://github.com/quirq-ai/xo"</pre>
+<p>Python 3.11 or newer. The package is <code>quirq-xo</code>, not <code>xo</code>: PyPI's <code>xo</code> is an unrelated game, and
+<code>pip install -U xo</code> would replace this tool with it. The command it installs is <code>xo</code>.</p>
+<h3>Commands</h3>
+<pre>xo login                        # every service the xo server lists: your XO API key (from the
+                                # XO team) for me and xo, and gh's own login for GitHub
+                                # (or: export XO_API_KEY=ak_..., which wins over the saved key)
+xo status                       # each service, its address, and whether you are logged in
+xo --help                       # every command
+xo create space --help          # the kinds of space
+xo create space NAME openclaw --help   # the flags one kind takes
+xo create space my-codex codex --volume-size 20
+xo create space my-cc claude-code --volume-size 20 --providers-anthropic-api-key ""
+xo create space my-claw openclaw --volume-size 20 \
+  --providers-anthropic-api-key "$ANTHROPIC_API_KEY" \
+  --notification-channels-telegram-bot-token "$TELEGRAM_BOT_TOKEN"
+xo create space                                  # this folder, named after itself: one branch per git repo in it, on the quirq hub
+xo create space dev --github                     # the folder ./dev, on GitHub instead (--gh too; --owner YOU picks the owner)
+xo create project notes                          # an empty repository at ./notes
+xo create project https://github.com/juanfont/headscale  # called headscale, cloned into ./headscale
+xo spaces --space-id 6f1c2c1e-...   # connection URLs for a space you own
+xo gh pr list                    # GitHub's gh, with these arguments
+xo sh project list               # the quirq hub's client spacehub (sh for short), on the hub xo login found</pre>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Request</th>
+<th>Body</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>xo create space NAME KIND</code></td>
+<td><code>POST /me/spaces</code> on your xo server: it creates the space through XO (<code>POST /KIND</code>) with NAME as its name there, then records it in your <code>spaces</code> as NAME</td>
+<td>the flags of KIND, below</td>
+</tr>
+<tr>
+<td><code>xo create space [NAME]</code></td>
+<td>no KIND: after you say yes, the folder (this one, named after itself, or <code>./NAME</code>, made if it is not there) gets one branch per git repository under it (its files, not its history) and an index branch that lists them: a new bare <code>.git</code> with <code>main</code> as the index, or, when the folder is already a git repository, that one, with the index on <code>xo-space</code> and your own branches untouched. Pushed to the hub project AGENT/NAME (in the agent's own space) on the quirq hub <code>xo login</code> found (made there with <code>spacehub project create</code> if missing; with no hub it stops and says so), or, only with <code>--github</code>/<code>--gh</code> (or <code>--owner</code>), to <code>github.com/OWNER/NAME</code>, or the GitHub repository the folder's origin is (a link to make it if it is missing); then <code>POST /me/spaces/connect</code>, nothing on XO</td>
+<td>none</td>
+</tr>
+<tr>
+<td>  KIND <code>claude-code</code></td>
+<td><code>POST /claude-code</code></td>
+<td>volume size; Anthropic provider</td>
+</tr>
+<tr>
+<td>  KIND <code>codex</code></td>
+<td><code>POST /codex</code></td>
+<td>volume size</td>
+</tr>
+<tr>
+<td>  KIND <code>antigravity</code></td>
+<td><code>POST /antigravity</code></td>
+<td>volume size</td>
+</tr>
+<tr>
+<td>  KIND <code>hermes</code></td>
+<td><code>POST /hermes</code></td>
+<td>volume size; providers; Telegram or Slack</td>
+</tr>
+<tr>
+<td>  KIND <code>openclaw</code></td>
+<td><code>POST /openclaw</code></td>
+<td>volume size; at least one provider and one channel</td>
+</tr>
+<tr>
+<td>  KIND <code>xo-cowork</code></td>
+<td><code>POST /xo-cowork</code></td>
+<td>volume size; providers; channels</td>
+</tr>
+<tr>
+<td>  KIND <code>nebius-openclaw</code></td>
+<td><code>POST /nebius-openclaw</code></td>
+<td>Token Factory key, Telegram token (feature flagged)</td>
+</tr>
+<tr>
+<td><code>xo spaces --space-id ID</code></td>
+<td><code>GET /spaces/{spaceId}</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo login [xo|github] [--key]</code> / <code>logout</code></td>
+<td>every listed service (or the one named): gets the XO key by browser sign-in when the server offers it (else, or with <code>--key</code>, asks for it), checks it with XO (a space that doesn't exist) and saves it with the address, and logs gh in to github.com / deletes the key and asks before logging gh out</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo status</code></td>
+<td>each service's address and whether you are logged in; never a key</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo me</code></td>
+<td><code>GET /me</code> on your xo server; prints <code>{"xo": {username, imageUrl, ..., "public_data": {...}, "private_data": {...}}}</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo projects</code> / <code>xo projects add NAME</code></td>
+<td><code>GET</code> / <code>POST /me/projects</code> on your xo server: the <code>projects</code> list in your own private metadata; the server makes the change and writes only that list</td>
+<td>the name only</td>
+</tr>
+<tr>
+<td><code>xo create project NAME [URL]</code></td>
+<td><code>GET</code> and <code>POST /me/projects</code>, then clones <code>https://github.com/OWNER/REPO</code> into <code>./REPO</code> (<code>./OWNER/REPO</code> when another of your projects is called <code>REPO</code>), or <code>git init ./NAME</code> for a plain name, with your own git. A project with a repo is recorded as <code>OWNER/REPO</code> and called <code>REPO</code>, so give a URL alone, or a NAME that is its <code>REPO</code> or <code>OWNER/REPO</code></td>
+<td>the name only</td>
+</tr>
+<tr>
+<td><code>xo connect P S</code> / <code>xo connect S</code></td>
+<td><code>POST /me/spaces/S/projects</code> / <code>POST /me/spaces/connect</code>: a project's ref in a space, or a new space entry in your metadata</td>
+<td><code>--ref</code> (default main) / <code>--id</code> for an XO space you already have</td>
+</tr>
+<tr>
+<td><code>xo connect P --repo URL</code></td>
+<td><code>POST /me/projects/connect</code>: a project made with a name only gets its repo and is recorded as <code>OWNER/REPO</code>; <code>./P</code> gets that origin if it has none and moves to <code>./REPO</code> (left in place unless its origin, fetch and push, is that repository)</td>
+<td>the name and <code>OWNER/REPO</code></td>
+</tr>
+<tr>
+<td><code>xo list projects|spaces|shared</code></td>
+<td><code>GET /me/projects</code> / <code>GET /me/spaces</code> / <code>GET /me/shared</code>; projects show as <code>{"name": "headscale", "owner": "juanfont"}</code>; <code>xo list</code> alone shows <code>{"projects": [...], "spaces": [...]}</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo spaces</code></td>
+<td><code>GET /me/spaces</code>: the spaces linked to your account, as <code>xo list spaces</code> shows them (with <code>--space-id ID</code> it is XO's <code>GET /spaces/{spaceId}</code>)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo share space:S|project:O/R USERNAME</code></td>
+<td><code>POST /me/share</code>: an invite in that user's <code>shared</code> list, holding the space's name and projects (never its id)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo accept ID</code> / <code>xo reject ID</code></td>
+<td><code>GET /me/shared</code> and a y/N, then <code>POST /me/shared/accept</code>: in one write, a shared space into your spaces or a shared project into the space you name, its projects into your projects, the invite off / <code>POST /me/shared/reject</code>: the invite off (the sender can share again)</td>
+<td><code>--as NAME</code> (accept a space under another name), <code>--space NAME</code> and <code>--ref REF</code> (where a shared project goes), <code>--yes</code></td>
+</tr>
+<tr>
+<td><code>xo install space:S</code> / <code>project:P</code></td>
+<td><code>GET /me/spaces</code>, then your own git: each project cloned or fetched into <code>./S/REPO</code> at its ref / P cloned, or fetched and fast-forwarded</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo update space:S</code> / <code>project:P</code></td>
+<td><code>git push</code> of each branch under <code>./S</code>, then <code>PUT /me/spaces/S</code> with the refs checked out (refused if the space changed) / <code>git push</code> of P's branch</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo sync space:S</code> / <code>project:P</code></td>
+<td><code>git pull --rebase</code> and push of each branch, then merges the space's changes with yours and <code>PUT</code>s them / <code>git pull --rebase</code> and push</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>xo gh ARGS</code> / <code>xo sh ARGS</code></td>
+<td>none from xo: runs <code>gh ARGS</code>, or <code>spacehub ARGS</code> with <code>SPACEHUB_SERVER</code> set to the hub <code>xo login</code> found (no hub: it says to run <code>xo login</code>), in this terminal, and exits with its code. Neither gets <code>XO_API_KEY</code> or other services' tokens; gh never gets <code>GH_HOST</code>. <code>sh</code> is a word inside xo only: the hub's client is installed as <code>spacehub</code>, never as <code>sh</code> (the system shell). Put it first: <code>xo gh ...</code>, not <code>xo --json gh ...</code>. Another CLI is one entry in <code>src/xo/attach.py</code></td>
+<td>none</td>
+</tr>
+</tbody>
+</table></div>
+<p>A GitHub project is called by its repo's name in every command (<code>project:headscale</code>); when another
+of your projects has that name, call it by its <code>OWNER/REPO</code> (its folder is then <code>./OWNER/REPO</code>). A
+repo named like such an <code>OWNER</code> folder goes in <code>./OWNER/REPO</code> too (<code>suraj/suraj</code> beside <code>suraj/react</code>),
+so no project's folder is ever inside another's. A checkout an older xo put in <code>./OWNER/REPO</code> is still
+used there.</p>
+<p><code>xo projects</code>, <code>xo list projects</code>, <code>xo create project</code> and <code>xo connect P --repo</code> print your
+projects as <code>[{"name": "headscale", "owner": "juanfont"}, {"name": "notes"}]</code>; a plain project has
+no owner. Your metadata still records a GitHub project as <code>juanfont/headscale</code>, so nothing stored
+changes.</p>
+<p>Every space on XO is created with <code>xo create space NAME KIND</code>; the old <code>xo claude-code</code>, <code>xo codex</code>, ...
+commands are gone and say so. It prints the recorded space and XO's answer, <code>id</code> included, and
+<code>xo spaces</code> (or <code>xo list spaces</code>) shows it again later. The API has no list, delete, start or stop
+endpoint, so <code>xo spaces --space-id ID</code> is the only way to XO's own view of a space.</p>
+<p>The API is XO's platform, <code>https://dev.xo.builders/api/core/v1</code> (the <code>xo</code> service); xo
+reaches it through the xo server (see Server mode and Services). Its spec is bundled with xo as
+<code>src/xo/openapi.json</code>, written from the xo-swarm source (<code>app/api/[[...slugs]]/route.ts</code> and
+<code>types/*-schema.ts</code> at 6dddd07aa) because the interactive docs sit behind a browser sign-in. To use
+another spec, pass <code>--spec FILE</code> or set <code>XO_SPEC=FILE</code>.</p>
+<p>Things to know:</p>
+<ul>
+<li>A new space's NAME is 1 to 32 letters, digits or hyphens, starting with a letter or digit, and
+not <code>new</code> or <code>create</code>. It is the space's name on XO and in your <code>spaces</code>, in lowercase as XO keeps it (xo says so when it
+changes it).
+A name you already use fails.</li>
+<li><code>--volume-size</code> is in GB, 20 to 100.</li>
+<li>A provider or channel flag sends that object with <code>"enabled": true</code>, so
+<code>--providers-openai-api-key K</code> sends <code>{"openai": {"enabled": true, "apiKey": "K"}}</code>.</li>
+<li>The API checks the body before the key, so a bad body answers 422 with every problem listed,
+even with no key.</li>
+<li>Every create except <code>nebius-openclaw</code> stores the XO API key you call with inside the new space,
+as its <code>xo_api_key</code>. That key can create spaces and read the connection URLs, session tokens
+included, of every space you own, so anything that can read the new space's environment (an
+agent steered by a message, say) can act as you. xo prints a line saying so before each such
+create, and cannot turn it off. If XO will issue you a second key, use that one for creates.</li>
+<li><code>xo spaces --space-id ID</code> prints <code>spaceApiUrl</code> and <code>openClawRestartUrl</code>, which carry a session token that
+expires within the hour. Treat them as secrets.</li>
+<li>Provider keys and bot tokens given as flags land in your shell history, and even from a variable
+(<code>"$ANTHROPIC_API_KEY"</code>) they show in the process list for as long as the request runs. Give the
+body with <code>--data @body.json</code> instead, or one key or token as <code>-</code> to type it (or pipe one line).</li>
+<li>A body field the command does not know is refused, since the server would drop it and create
+the space without that setting; <code>xo api</code> sends any body as given.</li>
+<li>If a create times out or is interrupted, the server may still have made the space: check before
+you retry.</li>
+</ul>
+<h3>Services</h3>
+<p>One <code>xo login</code> covers two services, plus GitHub through the GitHub CLI (<code>gh</code>). The xo server lists the two at <code>/config</code> (no key needed); xo
+ships the same list (<code>src/xo/services.json</code>) and uses its own copy when the server cannot give a
+good one. The names follow the commands: <code>xo</code> for the creates, and <code>me</code> for the xo server that
+answers <code>xo me</code>:</p>
+<pre>{
+  "schema": "xo-services/2",
+  "xo": { "url": "https://dev.xo.builders", "about": "..." },
+  "me": { "url": "https://xo.quirq.dev", "about": "..." }
+}</pre>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Address</th>
+<th>How you log in</th>
+<th>Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>me</code></td>
+<td>the xo server: <code>--url</code>, <code>XO_URL</code>, the one <code>xo login</code> saved, else <code>https://xo.quirq.dev</code> (the <code>me</code> address in xo's own list)</td>
+<td>your XO API key</td>
+<td><code>xo me</code></td>
+</tr>
+<tr>
+<td><code>xo</code></td>
+<td><code>https://dev.xo.builders</code>, reached through the xo server</td>
+<td>the same XO API key</td>
+<td><code>xo create space NAME KIND</code> and <code>xo spaces --space-id ID</code></td>
+</tr>
+<tr>
+<td><code>github</code></td>
+<td><code>https://github.com</code> (not in the list; always github.com)</td>
+<td>the GitHub CLI's own login (<code>gh auth login</code>), in your browser</td>
+<td><code>gh</code>, and git over https if you let gh set it up</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every XO API command, creates included, goes to the xo server you logged in to: xo sends your key
+to that one address, and the server passes it on to the <code>xo</code> address with each create. xo does not
+use a served list's <code>me</code> address; the key's address is always <code>--url</code>, <code>XO_URL</code>, the one <code>xo login</code>
+saved, else <code>https://xo.quirq.dev</code>.</p>
+<p><strong>Changed: XO's platform is now <code>https://dev.xo.builders</code>, not <code>https://app.xo.builders</code>.</strong> Every
+create carries your XO API key, and it now goes to dev.xo.builders. The xo server takes the new
+address on its next deploy unless <code>XO_CORE_API_URL</code> is set in its environment (in Vercel), which
+overrides it; set <code>XO_CORE_API_URL=https://app.xo.builders/api/core/v1</code> to keep the old one.</p>
+<p>The list holds addresses only, never keys. Keys stay on your machine: the XO key in
+<code>~/.config/xo/credentials</code>, gh's token wherever gh keeps it. xo checks a served list: no key is
+sent for it, no redirect is followed, every address must be plain https, and unknown services are
+skipped with a line. <code>xo login xo</code> (or <code>me</code>) or <code>xo login github</code> does one service; <code>xo-server</code> and
+<code>xo-platform</code>, the names before <code>xo-services/2</code>, still work. <code>xo logout</code> deletes the key and asks
+before logging gh out of github.com.</p>
+<h3>Server mode</h3>
+<p>XO API commands go to one address, the xo server (<code>https://xo.quirq.dev</code>, or <code>XO_URL</code>, or the one
+<code>xo login --url</code> saved). <code>xo me</code> reads your Clerk account, which needs Clerk's
+Secret Key. That key never goes on a user's machine: the same package runs as a server, <code>xo serve</code>,
+on one deployment that holds it. The server passes every other command (the creates and
+<code>xo spaces --space-id ID</code>) on to XO's core API under its <code>/api/core/v1</code>, with your key, as sent. XO's
+platform checks keys with the same Clerk instance as that deployment, so a key from another
+instance gets 401 from both. See
+<a href="https://github.com/quirq-ai/xo/blob/main/docs/server.md" target="_blank" rel="noopener">docs/server.md</a> and, to deploy it, <a href="https://github.com/quirq-ai/xo/blob/main/docs/deploy-vercel.md" target="_blank" rel="noopener">docs/deploy-vercel.md</a>.</p>
+<h3>How commands are named</h3>
+<p>The command is the path without a leading <code>/api</code> or <code>/vN</code> and without its <code>{placeholders}</code>, joined
+with dashes. When several methods share a path, each is an action: <code>list</code> and <code>get</code> (GET on the
+collection or one item), <code>create</code> (POST), <code>update</code> (PATCH), <code>replace</code> (PUT), <code>delete</code> (DELETE).
+Path, query and header parameters and the fields of a JSON body are the flags; a field nested in an
+object is named by its path (<code>providers.anthropic.apiKey</code> is <code>--providers-anthropic-api-key</code>). A
+body field the spec types as a string keeps the text you type; other values are JSON when they
+parse. Required ones are checked before anything is sent. A spec that cannot be read leaves <code>ops</code>,
+<code>call</code> and <code>api</code> working and makes generated endpoint commands stop with one line saying why.
+The built-in <code>login</code>, <code>logout</code> and <code>serve</code> commands also work independently of the spec.</p>
+<h3>Lower level</h3>
+<pre>xo ops                          # every operation: id, method, path, summary
+xo ops openclaw                 # only those whose id, path or tag mentions "openclaw"
+xo ops spaces --json            # the same with their parameters
+xo call create_codex --data '{"name": "my-codex", "volumeSize": 20}'
+xo call create_codex --field name=my-codex --field volumeSize=20   # the body field by field
+xo call create_openclaw --data @body.json                           # or from a file, or - for stdin
+xo call get_space --param spaceId=ID
+xo call create_codex --field name=x --field volumeSize=20 --dry-run # print the request, send nothing
+xo api GET /spaces/ID                                               # any request, spec or not</pre>
+<p>Through the xo server only the creates and <code>GET /spaces/{spaceId}</code> pass; any other <code>xo api</code>
+request, or an extra operation from your own <code>--spec</code>, gets the server's <code>HTTP 404: Not found</code>. To
+send one straight to XO, add <code>--url https://dev.xo.builders</code> and give the key with <code>XO_API_KEY</code> or
+<code>--api-key -</code> (the key <code>xo login</code> saved is only sent to the address it was saved with, so a one-run
+<code>--url</code> always needs one of those).</p>
+<p><code>--param</code> fills path, query and header parameters, never <code>Authorization</code>, <code>Host</code>, <code>Cookie</code>,
+<code>Proxy-*</code> or the other headers xo and HTTP own.
+<code>--field</code> values are JSON when they parse (<code>false</code>, <code>5</code>, <code>["a"]</code>) and plain strings otherwise.
+A request that is not a GET changes things on XO, so it prints one line on stderr before it goes.
+<code>--dry-run</code> needs no key and sends nothing. It prints the request with the provider keys and bot
+tokens the spec marks as secrets shown as <code>&lt;hidden&gt;</code>; add <code>--show-secrets</code> to see them. Those keys
+and tokens are redacted from responses and errors too, like the API key.
+Responses print as JSON on stdout. Any problem exits 1 with one line on stderr.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Variable</th>
+<th>Flag</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API key</td>
+<td><code>XO_API_KEY</code></td>
+<td><code>--api-key -</code> (asks without echo on a terminal, else reads one line from stdin)</td>
+<td>the key <code>xo login</code> saved in <code>$XDG_CONFIG_HOME/xo/credentials</code> (<code>~/.config/xo/credentials</code>); required for XO API calls except a dry run</td>
+</tr>
+<tr>
+<td>Address</td>
+<td><code>XO_URL</code></td>
+<td><code>--url</code></td>
+<td>the one <code>xo login</code> saved, then <code>https://xo.quirq.dev</code>; the core API is under its <code>/api/core/v1</code>. The flag wins over the variable. <code>XO_BASE_URL</code> and <code>XO_SERVER_URL</code> are no longer read: xo stops with a line saying so while either is set, unless <code>--url</code> or <code>XO_URL</code> is given</td>
+</tr>
+<tr>
+<td>Spec</td>
+<td><code>XO_SPEC</code></td>
+<td><code>--spec</code></td>
+<td>the copy bundled with xo</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>--api-key KEY</code> also works, but the key then lands in your shell history and in the process list
+other users of the machine can read. Prefer <code>xo login</code>, the variable, or <code>--api-key -</code>. The flag wins
+over the variable, and the variable over the saved key. The saved key is only sent to the address
+it was saved with. xo refuses a saved key file that other users could read, or that is a symlink. The options go before or after the command.</p>
+<h3>Safety</h3>
+<ul>
+<li>The key goes only in the <code>Authorization: Bearer</code> header. xo reads the spec only from a file
+(the bundled one, <code>--spec</code> or <code>XO_SPEC</code>); it never fetches one from the API with your key. It is redacted from any response or
+error that echoes it, and tests check it never reaches stdout or stderr, including on argument
+errors and unexpected failures. An argument error never repeats a value you typed, so a
+mistyped key flag (<code>--api_key KEY</code>, <code>--token=KEY</code>, <code>--api-keyKEY</code>) stays off the screen. A key
+with anything but letters, digits and <code>_ . - + / =</code> is refused without being shown, and the key
+is also redacted where escaping changes any of its characters, in any mix: URL escaping (<code>%2F</code>,
+in either case, or double-encoded as <code>%252F</code>, and <code>+</code> read as a space), JSON (<code>\/</code>, <code>\u002f</code>)
+and HTML (<code>&amp;#x2F;</code>, <code>&amp;#47;</code>, zero-padded or not, and <code>&amp;sol;</code>).</li>
+<li>xo never follows a redirect, so a redirect cannot carry the key to another host. A redirect to
+XO's sign-in page is reported as "this route does not accept an API key".</li>
+<li>Plain <code>http://</code> is refused except to this machine.</li>
+</ul>
+<h3>Develop</h3>
+<pre>python -m pip install -e ".[test]"
+python -m pytest -q</pre>
+<p>Tests run against a fake API on 127.0.0.1 (<code>tests/conftest.py</code>) and a synthetic spec
+(<code>tests/fixtures/openapi.json</code>); they never reach XO.</p>
+<h3>License</h3>
+<p>Apache-2.0.</p>

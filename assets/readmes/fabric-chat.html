@@ -1,0 +1,485 @@
+<p>A Slack-style team chat where the database is a Hyperledger Fabric 2.5 ledger. It runs in two ways:</p>
+<ul>
+<li><strong>The sandbox.</strong> Three made-up companies each run their own nodes on one laptop, and every message is a transaction on the ledger they share. It was built to explain Fabric: every message can be followed through the network, and the app shows which companies' nodes hold its text. Everything in it is test data.</li>
+<li><strong>A company's own server.</strong> The same app for one real company: its own keys, its own certificate authority, real sign-in, and workspaces it shares with other companies that run their own. See A company on its own server.</li>
+</ul>
+<p>Most of this page is about the sandbox.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/chat.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/chat.png" alt="The chat with the ledger panel open" loading="lazy"></a></p>
+<h3>Run it</h3>
+<p>You need Docker Desktop (with the WSL 2 backend on Windows) and Node 22.13 or newer. Nothing else: no Go, and no Fabric tools on the machine. Everything that needs them runs in containers.</p>
+<pre>npm install</pre>
+<pre>npm run net:up</pre>
+<pre>npm run dev</pre>
+<p>Then open <a href="http://localhost:4700" target="_blank" rel="noopener">http://localhost:4700</a> and choose who you are.</p>
+<p><code>net:up</code> takes under a minute once the images are downloaded (about 1.7 GB the first time). It starts 16 containers, creates two channels, deploys the chaincode, enrols six people and writes a few conversations.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>npm run net:status</code></td>
+<td>Which containers run, and how many blocks each company's peer holds</td>
+</tr>
+<tr>
+<td><code>npm run net:stop</code> / <code>net:start</code></td>
+<td>Pause and resume, keeping the ledgers</td>
+</tr>
+<tr>
+<td><code>npm run net:down</code></td>
+<td>Remove everything: containers, ledgers, certificates</td>
+</tr>
+<tr>
+<td><code>npm run net:chaincode</code></td>
+<td>Rebuild and restart the chaincode after changing the Go code</td>
+</tr>
+<tr>
+<td><code>npm test</code></td>
+<td>The chaincode's unit tests, then an end-to-end check against the running network</td>
+</tr>
+<tr>
+<td><code>npm run images</code></td>
+<td>Build the three images a company's own server runs. With <code>-- --push &lt;name&gt;</code>, send them to a registry too</td>
+</tr>
+<tr>
+<td><code>npm run company -- "&lt;name&gt;" &lt;id&gt;</code></td>
+<td>Start one more company on this machine, in a folder of its own under <code>companies/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:company</code></td>
+<td>Launch a throwaway company from those images, run 86 checks against it, and remove it</td>
+</tr>
+<tr>
+<td><code>npm run test:companies</code></td>
+<td>Launch three throwaway companies, have them share workspaces through their own apps, and remove them</td>
+</tr>
+<tr>
+<td><code>npm run test:servers</code></td>
+<td>Two companies on two stand-in servers: images from a registry, HTTPS, a shared workspace, a backup and a restore. Needs five more images, which it names if they are missing</td>
+</tr>
+<tr>
+<td><code>npm run test:upgrade -- scripts/releases/0.2.0 0.2.0</code></td>
+<td>Move two throwaway companies that share a workspace from an older release to this one. It needs the older release's two files, kept in that folder, and its images on the machine</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>npm test</code> writes a few test channels to the ledger. A ledger cannot forget them, so run <code>npm run net:down</code> and <code>npm run net:up</code> afterwards if you want a clean one.</p>
+<p>After <code>net:down</code> and <code>net:up</code>, stop <code>npm run dev</code> and start it again. The app server keeps the certificates in memory, and a rebuilt network has new ones.</p>
+<h3>What each thing is on Fabric</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>In the app</th>
+<th>On Fabric</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A company, such as Aster Labs</td>
+<td>An organisation. It runs its own peer, its own orderer and its own certificate authority (CA).</td>
+</tr>
+<tr>
+<td>A person, such as Alice</td>
+<td>A certificate her company's CA signed, and the private key that goes with it. Every message she sends is signed with that key.</td>
+</tr>
+<tr>
+<td>A workspace</td>
+<td>A channel: one ledger, held by the companies on it and by nobody else.</td>
+</tr>
+<tr>
+<td>An open #channel</td>
+<td>Records in the channel's shared state. Every company on the channel stores them, and they appear in the blocks in the clear.</td>
+</tr>
+<tr>
+<td>A private channel or direct message</td>
+<td>Records in a private data collection. Only the companies it names store the text. Everyone else on the channel gets a hash.</td>
+</tr>
+<tr>
+<td>Pressing Send</td>
+<td>A transaction: endorsed by peers, ordered into a block, then checked and applied by every peer on the channel.</td>
+</tr>
+<tr>
+<td>The rules: who may post, edit or join</td>
+<td>Chaincode. The same program runs on every company's peer, and a change counts only if they reach the same result.</td>
+</tr>
+<tr>
+<td>A message arriving</td>
+<td>A block event. Each company's app watches the blocks its own peer commits. Nothing travels between companies except through the ledger.</td>
+</tr>
+<tr>
+<td>A message's edit history</td>
+<td>The blockchain itself. Each earlier version sits in an earlier block, and each block names the hash of the one before it.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>The network</h3>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/network.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/network.svg" alt="Three companies, each with a CA, a peer and an orderer, and two channels" loading="lazy"></a></p>
+<ul>
+<li><strong>Three companies</strong>, each with one peer (and its CouchDB state database), one orderer, one CA and one copy of the chaincode.</li>
+<li><strong>Two channels.</strong> <code>commons</code> is on all three peers. <code>dealroom</code> is on Aster's and Birch's peers only, and only their two orderers order it, because an orderer sees every transaction it orders.</li>
+<li><strong>Ordering is Raft</strong>, one orderer per company. Two of the three must be running for <code>commons</code> to take a transaction.</li>
+<li><strong>The rule for a change</strong> on a channel is "more than half of its companies must endorse it". No single company can write to the shared ledger alone.</li>
+</ul>
+<p>All of it comes from <a href="https://github.com/quirq-ai/fabric-chat/blob/main/network.json" target="_blank" rel="noopener">network.json</a>. Add a company or a person there and run <code>npm run net:down</code> then <code>npm run net:up</code>.</p>
+<h3>What happens when you press Send</h3>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/send.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/send.svg" alt="Sign, endorse, order, check and commit" loading="lazy"></a></p>
+<p>In the app, click the small "block" link under any message. The panel on the right shows these four steps for that message, with the real names: whose certificate signed it, which peers endorsed it, which block it is in, and what every peer decided about it.</p>
+<h3>How private is a conversation?</h3>
+<p>Every conversation shows three dots: one per company in the workspace. A filled dot means that company's node stores the text. A hollow dot means it stores only hashes.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Aster's peer</th>
+<th>Birch's peer</th>
+<th>Cedar's peer</th>
+<th>Orderers</th>
+<th>What an outside company still sees</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open channel, such as #general</td>
+<td>text</td>
+<td>text</td>
+<td>text</td>
+<td>text, in the block</td>
+<td>Nothing is outside: all three are in it</td>
+</tr>
+<tr>
+<td>Private, two companies, such as #pricing</td>
+<td>text</td>
+<td>text</td>
+<td>hash only</td>
+<td>hash only</td>
+<td>That Alice wrote something, when, and in which collection</td>
+</tr>
+<tr>
+<td>Private, one company, such as #aster-team</td>
+<td>text</td>
+<td>hash only</td>
+<td>hash only</td>
+<td>hash only</td>
+<td>The same</td>
+</tr>
+<tr>
+<td>A separate workspace, such as Deal room</td>
+<td>text</td>
+<td>text</td>
+<td>nothing</td>
+<td>text, but only Aster's and Birch's orderers</td>
+<td>Nothing at all, not even that the channel exists</td>
+</tr>
+</tbody>
+</table></div>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/private.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/private.png" alt="A private message: Cedar holds only its hash" loading="lazy"></a></p>
+<p>The app chooses the scope for you: the smallest one that covers the company of everyone in the conversation. Add someone from a third company and the conversation can no longer be private from that company.</p>
+<p>Three things are worth knowing before promising anyone privacy on Fabric:</p>
+<ol>
+<li><strong>Privacy is between companies, not between people.</strong> Whoever runs a company's peer can read everything that peer stores. The chaincode stops Arjun from reading a conversation Alice did not add him to, but Aster's administrator could open the database. Secrecy between colleagues would need the text to be encrypted before it is sent.</li>
+<li><strong>A hash proves, but also leaks a little.</strong> Cedar cannot read an Aster and Birch message, yet it holds the hash that proves what was said, which settles any later dispute between the two. It also sees who sent each private transaction and when.</li>
+<li><strong>"Members only" is not "private" when all companies are involved.</strong> A members-only channel with people from all three companies is kept in the shared state, in the clear. The app marks such channels with a warning.</li>
+</ol>
+<p>This is the same #pricing message as Carol of Cedar Works can see it. Her peer received the transaction in a block like everyone else's: she can see that Alice sent something, and when, and hashes where the text would be.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/outsider.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/outsider.png" alt="What an outside company sees of a private message" loading="lazy"></a></p>
+<p>The app tells you where a conversation will be kept before you create it:</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/new-channel.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/new-channel.png" alt="Choosing people changes where the channel is kept" loading="lazy"></a></p>
+<h3>Ten minutes with it</h3>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/side-by-side.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/side-by-side.png" alt="Alice, Bob and Carol side by side" loading="lazy"></a></p>
+<ol>
+<li>
+<p><strong>Open three people side by side.</strong> The button is on the first screen. Send a message as Alice in #general and watch it reach Bob and Carol about a second later.</p>
+</li>
+<li>
+<p><strong>Follow a message.</strong> Click the "block" link under it. Read the four steps, then scroll down to "What the block records".</p>
+</li>
+<li>
+<p><strong>Go private.</strong> As Alice, post in #pricing. Bob receives it. Carol has no #pricing at all, but her ledger panel shows a transaction marked "Aster Labs and Birch &amp; Co". Click it as Carol: she sees who sent it and when, and hashes where the text would be.</p>
+</li>
+<li>
+<p><strong>Edit, then delete.</strong> In #general, the old versions stay under "Every version, still on the ledger". In #pricing, delete purges the text from both peers. Only the hashes in the old blocks remain.</p>
+</li>
+<li>
+<p><strong>Start a channel.</strong> Tick people from different companies and watch "Kept by" change before you create it.</p>
+</li>
+<li>
+<p><strong>Add a person.</strong> On the first screen, "Add a person" asks that company's CA to sign a new certificate. The new person can post at once.</p>
+</li>
+<li>
+<p><strong>Take a node away.</strong> In the ledger panel, under Network, stop Cedar's peer and post in #general: it still commits, because two of three companies can endorse. Start it again and its block count catches up. Stop Birch's peer and post in #pricing: refused, because both companies that keep it must endorse. Stop one orderer and posts still commit: if it was the one leading, the next post takes up to ten seconds while the other two choose a new leader. Stop two orderers and nothing commits.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/network.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/network.png" alt="The Network tab: every node, and whether the peers agree" loading="lazy"></a></p>
+</li>
+<li>
+<p><strong>Switch to the Deal room</strong> (the "De" tile). Under Network, Cedar is listed as holding nothing.</p>
+</li>
+<li>
+<p><strong>Look inside each company's database.</strong> Open <a href="http://localhost:45984/_utils" target="_blank" rel="noopener">http://localhost:45984/_utils</a> (Aster), <a href="http://localhost:45985/_utils" target="_blank" rel="noopener">http://localhost:45985/_utils</a> (Birch) and <a href="http://localhost:45986/_utils" target="_blank" rel="noopener">http://localhost:45986/_utils</a> (Cedar). The user is <code>admin</code> and the password is in <code>.generated/secrets.json</code>. Aster has a database named <code>commons_chat$$p$aster$m$s$p-$birch$m$s$p</code> holding the private messages. Cedar has only <code>commons_chat$$h…</code>, the hashes, and no <code>dealroom</code> databases at all.</p>
+</li>
+</ol>
+<h3>A company on its own server</h3>
+<p>The sandbox runs every company on one machine and asks for no passwords. The plan is for each company to run its own copy on its own server, add its own people, and connect to other companies when it chooses to. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/many-companies.md" target="_blank" rel="noopener">docs/many-companies.md</a> is a short guide to that plan, in five steps. The first three are built: a company can launch on its own with real sign-in, two or more such companies can share a workspace, and they can do it from separate servers, over HTTPS, with backups. That last step has run on a stand-in for two servers, not yet on two real ones.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/company-sign-in.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/company-sign-in.png" alt="The sign-in page of a company&#x27;s own server" loading="lazy"></a></p>
+<p>Start a company from the template folder. <code>./chat</code> needs only Docker: it downloads the release's three images from GitHub's container registry, where they are public. On Windows run it in Git Bash, as <code>sh chat up</code>.</p>
+<pre>cd node-template</pre>
+<pre>./chat up</pre>
+<p>To run your own build of the images instead, run <code>npm run images</code> and put <code>"images": "fabric-chat"</code> in <code>company.json</code>.</p>
+<p>The first start takes about 25 seconds. It makes the company's root key on that machine, has the company's own certificate authority issue a certificate to each node, creates a home workspace that only this company is on, and prints a one-time link for the first administrator. She opens it, chooses a password, and adds everyone else from the People button. Each person gets a link of their own and chooses their own password.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/company-chat.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/company-chat.png" alt="The first administrator and a colleague in #general, with the company&#x27;s own ledger beside them" loading="lazy"></a></p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th></th>
+<th>The sandbox</th>
+<th>A company's own server</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Companies</td>
+<td>Three, on one machine</td>
+<td>One</td>
+</tr>
+<tr>
+<td>Started with</td>
+<td><code>npm run net:up</code>, then <code>npm run dev</code></td>
+<td><code>./chat up</code></td>
+</tr>
+<tr>
+<td>Needs</td>
+<td>Docker and Node</td>
+<td>Docker</td>
+</tr>
+<tr>
+<td>Signing in</td>
+<td>Choose a person</td>
+<td>A handle and a password. An administrator adds people</td>
+</tr>
+<tr>
+<td>A company's ID</td>
+<td><code>AsterMSP</code></td>
+<td>A domain name it owns, such as <code>aster.example</code>. People read like email addresses: <code>alice@aster.example</code></td>
+</tr>
+<tr>
+<td>Certificates</td>
+<td>Made by Fabric's test tool, <code>cryptogen</code></td>
+<td>Issued by the company's own certificate authority, under a root key made on its server</td>
+</tr>
+<tr>
+<td>People's keys</td>
+<td>Plain files</td>
+<td>Locked on disk. The key that locks them is kept in a different volume</td>
+</tr>
+<tr>
+<td>Other companies</td>
+<td>In one network from the start</td>
+<td>Each on its own. Two or more share a workspace by swapping cards and accepting an invitation</td>
+</tr>
+</tbody>
+</table></div>
+<p>The template is three files: <a href="https://github.com/quirq-ai/fabric-chat/blob/main/node-template/company.json" target="_blank" rel="noopener">company.json</a>, the <a href="https://github.com/quirq-ai/fabric-chat/blob/main/node-template/chat" target="_blank" rel="noopener">chat</a> command and <a href="https://github.com/quirq-ai/fabric-chat/blob/main/node-template/compose.yaml" target="_blank" rel="noopener">compose.yaml</a>. The <a href="https://github.com/quirq-ai/fabric-chat/blob/main/node-template/README.md" target="_blank" rel="noopener">template's README</a> is the runbook: every setting, every command, and what is kept where. The same files are published by themselves as the template repository <a href="https://github.com/quirq-ai/fabric-chat-node" target="_blank" rel="noopener">fabric-chat-node</a>.</p>
+<h4>Two companies share a workspace</h4>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/companies-start.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/companies-start.png" alt="An administrator starts a shared workspace from another company&#x27;s card" loading="lazy"></a></p>
+<p>An administrator opens <strong>Other companies</strong> and does three things with the other company's administrator. Nothing secret changes hands.</p>
+<ol>
+<li><strong>They swap cards.</strong> A card is a company's public face: its name, its root certificate and where its nodes are.</li>
+<li><strong>One starts a workspace</strong> from the other's card, and sends back an invitation: the new ledger's first block, with both cards.</li>
+<li><strong>The other accepts.</strong> Its node first works out what the block should say for those cards, and joins only if the block says exactly that.</li>
+</ol>
+<p>The two nodes then agree on the rules by themselves, and the workspace appears for everyone at both companies. Each company's people talk through their own company's node, and every message in an open channel is endorsed by both.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/screens/companies-chat.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/fabric-chat/main/docs/screens/companies-chat.png" alt="People of two companies in one workspace, each through their own company&#x27;s node" loading="lazy"></a></p>
+<p>To try it on one machine, start two companies:</p>
+<pre>npm run company -- "Aster Labs" aster.example</pre>
+<pre>npm run company -- "Dune Freight" dune.example</pre>
+<p>Each command makes a folder for the company under <code>companies/</code>, starts it on the next free port, and prints its first administrator's link. Every company started this way joins one Docker network, which stands in for the internet between them: it is the <code>dockerNetwork</code> setting in each <code>company.json</code>. <code>npm run test:companies</code> does the same with three throwaway companies, and checks the result.</p>
+<h4>On a real server</h4>
+<p>Two lines in <code>company.json</code> put a company on the internet, once its three names point at the server:</p>
+<pre>  "https": "auto",
+  "node": { "address": "0.0.0.0" },</pre>
+<ul>
+<li><strong>HTTPS comes by itself.</strong> A small proxy on the server asks Let's Encrypt for a certificate for the chat's name, and renews it.</li>
+<li><strong>The node opens three ports</strong> for other companies' servers: 7051, 7050 and 7055. Nothing else is opened, and <code>./chat status</code> says what is.</li>
+<li><strong>The app says whether it can reach another company's node</strong> as soon as an administrator pastes that company's card, and whether what answers there really is that company's.</li>
+<li><strong><code>./chat backup</code></strong> puts everything a company has into one file, locked with a passphrase. <strong><code>./chat restore</code></strong> brings the company back on an empty server.</li>
+<li><strong>The images come from a registry.</strong> A workflow publishes each release to GitHub's container registry, after it has started a company with them, and <code>./chat up</code> downloads it.</li>
+</ul>
+<p><code>npm run test:servers</code> proves all of it on one computer. Each company's server is a container running a Docker of its own, at its own address. Around them are a name server, a registry and Pebble, the test server Let's Encrypt publishes. The two servers share nothing but that network. The check launches a company on each, connects them, switches one off and on, and then destroys one and restores it on an empty server from its backup: 59 checks in about six minutes.</p>
+<p>What it does not do yet: run on two real servers, which is the one thing left of this step. Removing a person. Adding a company to a workspace, or leaving one.</p>
+<h3>How it is built</h3>
+<pre><code>chaincode/chat/       the chat's rules, in Go. The same for the sandbox and for a company's own server
+server/               the app server: Fabric Gateway client, block decoder, HTTP API, sign-in
+web/                  the pages: React
+docs/                 the figures on this page, and the guide to many companies
+The sandbox
+network.json          the three companies, their people and their workspaces
+network/              turns network.json into a running Fabric network
+  generate.mjs        writes the certificate, channel and Docker Compose files into .generated/
+  net.mjs             up, down, status, stop, start: it only calls Docker
+  scripts/            what runs inside the containers: channels, chaincode, enrolment
+A company's own server
+node-template/        what a company copies: company.json, the chat command, compose.yaml
+ctl/                  the admin tool its server runs: certificates, first blocks, the rules, and the agent that
+                      shares a workspace with another company when the app asks
+companies/            companies started on this machine, each in a folder of its own. Git ignores it
+Dockerfile            the image of the app
+scripts/              images.mjs builds the three images; company-check.mjs and companies-check.mjs test
+                      one company, and three sharing workspaces, end to end
+</code></pre>
+<h4>The chaincode</h4>
+<p>One contract, <code>chat</code>, in <a href="https://github.com/quirq-ai/fabric-chat/blob/main/chaincode/chat" target="_blank" rel="noopener">chaincode/chat</a>. Every function that writes takes a scope and one JSON document, and refuses with a coded error such as <code>CHAT_NOT_MEMBER</code>.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Function</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Join</code>, <code>Directory</code>, <code>Whoami</code></td>
+<td>The workspace's directory of people. An ID such as <code>alice@AsterMSP</code>, or <code>alice@aster.example</code> on a company's own server, is read from the caller's certificate, never from an argument.</td>
+</tr>
+<tr>
+<td><code>CreateConversation</code>, <code>AddMembers</code>, <code>Overview</code></td>
+<td>Channels and direct messages. Everyone in a conversation must work at a company that keeps its scope.</td>
+</tr>
+<tr>
+<td><code>Post</code>, <code>Messages</code>, <code>Edit</code>, <code>Delete</code>, <code>React</code></td>
+<td>Messages. Only the author may edit or delete. Delete blanks a public message and purges a private one.</td>
+</tr>
+<tr>
+<td><code>History</code></td>
+<td>Every version a public message has had.</td>
+</tr>
+<tr>
+<td><code>Inspect</code></td>
+<td>What the peer running it holds for one key: the record, or only its hash. This is what "Who holds this message" asks each company's peer.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Records are kept under readable keys: <code>profile~alice@AsterMSP</code>, <code>conv~general</code>, <code>msg~general~1794489506634-ee38f29a</code>, <code>react~general~&lt;message&gt;~tada~bob@BirchMSP</code>.</p>
+<h4>The app server</h4>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/fabric.ts" target="_blank" rel="noopener">server/fabric.ts</a> talks to Fabric through the Gateway service each 2.5 peer runs. A read asks the person's own company's peer. A write goes through <code>endorse</code>, <code>submit</code> and <code>getStatus</code>, and the time each took is shown under the message.</p>
+<p><a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/ledger.ts" target="_blank" rel="noopener">server/ledger.ts</a> follows each peer's blocks from block 0, and <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/decode.ts" target="_blank" rel="noopener">server/decode.ts</a> unpacks them: the signer, the endorsers, the reads and writes, the validation result. The ledger panel is drawn from that, and so is the live update of the chat.</p>
+<p>On a company's own server the same code runs with five more files. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/company.ts" target="_blank" rel="noopener">server/company.ts</a> is sign-in, invitations and what an administrator can do. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/accounts.ts" target="_blank" rel="noopener">server/accounts.ts</a> keeps accounts and sessions: passwords as scrypt hashes, and links and cookies as hashes too. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/wallet.ts" target="_blank" rel="noopener">server/wallet.ts</a> locks each person's key with AES-256-GCM. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/ca.ts" target="_blank" rel="noopener">server/ca.ts</a> asks the company's certificate authority for a new person's certificate. <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/desk.ts" target="_blank" rel="noopener">server/desk.ts</a> passes an administrator's request to share a workspace on to the node's agent, which holds the key that takes. Which way the app runs is decided once, in <a href="https://github.com/quirq-ai/fabric-chat/blob/main/server/config.ts" target="_blank" rel="noopener">server/config.ts</a>.</p>
+<h3>From the test-network tutorial to this network</h3>
+<p>The Fabric tutorial at <a href="https://hyperledger-fabric.readthedocs.io/en/release-2.5/test_network.html" target="_blank" rel="noopener">Using the Fabric test network</a> does these steps one at a time with <code>network.sh</code>. Here <code>npm run net:up</code> does the same steps for three companies, and prints them as it goes.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Tutorial</th>
+<th>Here</th>
+<th>The Fabric tool behind it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before you begin: install samples, binaries and images</td>
+<td>Nothing to install: the tools run in the <code>fabric-tools</code> container</td>
+<td></td>
+</tr>
+<tr>
+<td><code>./network.sh up</code></td>
+<td>Steps 1, 2 and 4</td>
+<td><code>cryptogen</code>, then <code>docker compose up</code></td>
+</tr>
+<tr>
+<td><code>./network.sh createChannel</code></td>
+<td>Step 5, once per channel</td>
+<td><code>configtxgen</code> for the first block, <code>osnadmin channel join</code> for each orderer, <code>peer channel join</code> for each peer</td>
+</tr>
+<tr>
+<td><code>./network.sh deployCC</code></td>
+<td>Steps 3 and 6</td>
+<td><code>peer lifecycle chaincode</code> <code>install</code>, <code>approveformyorg</code>, <code>commit</code></td>
+</tr>
+<tr>
+<td>"Interacting with the network" with the <code>peer</code> command</td>
+<td>The app, through the Gateway</td>
+<td><code>@hyperledger/fabric-gateway</code></td>
+</tr>
+<tr>
+<td>"Bring up the network with Certificate Authorities"</td>
+<td>Step 7: each company's CA enrols its people</td>
+<td><code>fabric-ca-client register</code> and <code>enroll</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>What is different from the tutorial's network: three companies instead of two, an orderer per company instead of one shared orderer, two channels with different members, private data collections, and the chaincode running as a service.</p>
+<h3>If you have used Fabric 1.4</h3>
+<p>Much of what is written about Fabric describes version 1.4. These are the places where 2.5 works differently, and what this project does in each.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th></th>
+<th>Fabric 1.4</th>
+<th>Fabric 2.5, as used here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Starting a channel</td>
+<td>An orderer system channel and a consortium first. Then a channel transaction, then an anchor-peer update per company.</td>
+<td>No system channel. One first block per channel holds everything, anchor peers included. Each orderer is handed it with <code>osnadmin channel join</code>.</td>
+</tr>
+<tr>
+<td>Deploying chaincode</td>
+<td><code>install</code>, then one company runs <code>instantiate</code> and sets the endorsement policy for everyone.</td>
+<td>Each company installs and approves for itself. It is committed only once more than half have approved the same definition.</td>
+</tr>
+<tr>
+<td>Running chaincode</td>
+<td>The peer builds a Docker image and starts it, which needs the Docker socket inside the peer.</td>
+<td>Chaincode as a service: an image built once, one container per company, and the peer connects to it. No Docker socket in the peer.</td>
+</tr>
+<tr>
+<td>Sending a transaction</td>
+<td>The app picks the endorsing peers, collects their answers and sends them to an orderer.</td>
+<td>The app talks only to its own peer's Gateway, which finds the endorsers and the orderer itself.</td>
+</tr>
+<tr>
+<td>Finding a transaction's block</td>
+<td>A query to the peer afterwards, then decoding the block by hand.</td>
+<td>The app follows block events and decodes them as they arrive.</td>
+</tr>
+<tr>
+<td>Private data</td>
+<td>Collections that every company must list up front.</td>
+<td>The same, plus a collection per company that Fabric provides for free, and purge (new in 2.5).</td>
+</tr>
+<tr>
+<td>Endorsement rule</td>
+<td>One rule per chaincode.</td>
+<td>A default for the channel, and a separate rule for each private collection.</td>
+</tr>
+<tr>
+<td>Go chaincode library</td>
+<td><code>fabric/core/chaincode/shim</code></td>
+<td><code>fabric-contract-api-go/v2</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Things this build taught</h3>
+<ol>
+<li><strong>CouchDB hands JSON back with its keys in alphabetical order.</strong> A record written with keys in another order comes back as different bytes, so the hash of what a peer holds no longer equals the hash on the ledger. The chaincode writes every record with sorted keys (<a href="https://github.com/quirq-ai/fabric-chat/blob/main/chaincode/chat/ledger.go" target="_blank" rel="noopener">ledger.go</a>, <code>canonical</code>).</li>
+<li><strong>Private details travel in the transient field, never as arguments.</strong> Arguments are recorded in the block for every company. The chaincode refuses a private call that carries its details as an argument.</li>
+<li><strong>A hash of a short message can be guessed.</strong> Everyone on the channel sees the hash of each private record, and could hash "yes" and "no" to compare. Every private record carries a random salt.</li>
+<li><strong>A private transaction may not search and write.</strong> Fabric refuses a transaction that runs a range query on a collection and also writes to it. Reads of one key are fine. So a private delete is told which reactions to clear instead of looking them up.</li>
+<li><strong>Avoid records that everyone updates.</strong> Two transactions that read the same record and land in the same block cannot both win. A conversation's "last message" pointer is overwritten without being read, and each reaction is its own record, so people posting at the same moment never knock each other out.</li>
+<li><strong>Events are public.</strong> A chaincode event is part of the block. A private conversation's event says only that something happened in its collection.</li>
+<li><strong>An orderer sees what it orders.</strong> A channel that must be hidden from a company cannot use that company's orderer. <code>dealroom</code> is ordered by Aster's and Birch's orderers alone.</li>
+<li><strong>Private IDs must not be guessable.</strong> A private conversation's key is hashed on the shared ledger. If the key were built from its members' names, an outsider could test every pair. Private IDs come from the transaction ID.</li>
+<li><strong>Orderers that start at different times need their own port.</strong> When one company's orderer joins a new channel before the other's, its first link to the other is made without a certificate, and Fabric keeps using that link, so no leader is ever elected. In this demo every orderer starts together and it never shows. With <code>ports.cluster</code> set in <code>network.json</code>, orderers talk to each other on a second port that refuses a link without a certificate, and they simply try again until it works.</li>
+</ol>
+<h3>The limits of the sandbox</h3>
+<p>A company's own server removes the first three of these for one company. Its own limits are listed in <a href="https://github.com/quirq-ai/fabric-chat/blob/main/node-template/README.md" target="_blank" rel="noopener">the template's README</a>.</p>
+<ul>
+<li><strong>One app server plays all three companies</strong> and holds every person's private key. In a real deployment each company runs its own, and keys live in an HSM or on the person's device. "Who holds this message" works only because this one server can ask each company's peer as that company.</li>
+<li><strong>There are no passwords.</strong> Choosing a person is the sign-in. The certificate behind it is real.</li>
+<li><strong>People's certificates come from each company's test CA</strong>, which signs with the key <code>cryptogen</code> made. Fine for a test network and nothing else.</li>
+<li><strong>A message's time is the sender's clock.</strong> Block order is the truth; the time shown is what the sender's app claimed.</li>
+<li><strong>The app server listens on this machine only</strong> and refuses requests from other sites, because it holds keys and can stop the test network's containers.</li>
+<li>Left out: threads, files, search, paging through long conversations, leaving a conversation, and revoking a person's certificate.</li>
+</ul>

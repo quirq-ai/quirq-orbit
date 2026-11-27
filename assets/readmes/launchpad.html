@@ -1,0 +1,118 @@
+<h2>XO Launchpad CLI</h2>
+<p>Create apps, get Docker commands, and manage deployments from your terminal.
+Uses the same sign-in as <a href="https://github.com/quirq-ai/xo" target="_blank" rel="noopener">xo</a>.</p>
+<h3>Install</h3>
+<p>Requires Python 3.11+ and Git. Install in a Python virtual environment:</p>
+<pre>python -m pip install "xo-launchpad @ git+https://github.com/quirq-ai/launchpad.git"</pre>
+<p>Works on Windows, Linux, and macOS. Docker is needed to build and push images.
+For local development, clone this repository and run <code>python -m pip install -e .</code>.</p>
+<h3>Sign in</h3>
+<p>Install the <a href="https://github.com/quirq-ai/xo" target="_blank" rel="noopener">xo CLI</a> and make sure <code>xo</code> is on PATH.</p>
+<pre>xo-launchpad auth login
+xo-launchpad auth status</pre>
+<p>Already signed in through <code>xo</code>? Start using Launchpad directly. Both tools share the saved login.
+<code>xo-launchpad auth logout</code> signs out of that shared login too.</p>
+<h3>Create an app</h3>
+<pre>xo-launchpad app create my-app --port 3000</pre>
+<p>Creates a blank app and prints its URL, a one-time registry password, and Docker commands:</p>
+<pre>docker login registry.xo.builders -u YOUR_PUSH_USERNAME
+docker build --platform linux/amd64 -t YOUR_IMAGE:latest .
+docker push YOUR_IMAGE:latest</pre>
+<p>The CLI fills in the real username and image. Run the commands from your app's Dockerfile folder;
+your server must listen on <code>0.0.0.0</code> and the configured port. Save the registry password for Docker login.
+Pushing deploys automatically when the server's registry webhook is configured; otherwise run
+<code>xo-launchpad app deploy my-app --tag latest --wait</code>.</p>
+<pre>xo-launchpad app docker my-app     # print the Docker commands again
+xo-launchpad app status my-app
+xo-launchpad app logs my-app</pre>
+<h3>Commands</h3>
+<p><code>APP</code> accepts an app UUID, exact name, or slug.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth login / status / logout</code></td>
+<td>Sign in, check access, or sign out through XO</td>
+</tr>
+<tr>
+<td><code>templates [NAME]</code></td>
+<td>List templates or inspect their parameters</td>
+</tr>
+<tr>
+<td><code>app list</code></td>
+<td>List your apps</td>
+</tr>
+<tr>
+<td><code>app create NAME</code></td>
+<td>Create an app; defaults to the blank template</td>
+</tr>
+<tr>
+<td><code>app get / status / logs / events APP</code></td>
+<td>Inspect an app and its runtime</td>
+</tr>
+<tr>
+<td><code>app docker APP</code></td>
+<td>Print Docker login, build, and push commands</td>
+</tr>
+<tr>
+<td><code>app push APP</code></td>
+<td>Build and push using your local Docker installation</td>
+</tr>
+<tr>
+<td><code>app deploy / rollback APP</code></td>
+<td>Deploy an image or restore a previous release</td>
+</tr>
+<tr>
+<td><code>app releases / artifacts APP</code></td>
+<td>Inspect release history or available images</td>
+</tr>
+<tr>
+<td><code>app start / stop / restart APP</code></td>
+<td>Control the app lifecycle</td>
+</tr>
+<tr>
+<td><code>app env / port / health / storage</code></td>
+<td>Configure the app through each command's subcommands</td>
+</tr>
+<tr>
+<td><code>app domains</code></td>
+<td>Manage domains through its subcommands</td>
+</tr>
+<tr>
+<td><code>app credentials rotate APP</code></td>
+<td>Replace the app's push credentials</td>
+</tr>
+<tr>
+<td><code>app open / delete APP</code></td>
+<td>Open the app URL or delete the app and its data</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>Show API settings and credential source</td>
+</tr>
+<tr>
+<td><code>api METHOD PATH</code></td>
+<td>Call a supported user deployment endpoint directly</td>
+</tr>
+</tbody>
+</table></div>
+<p>The table groups related commands. Use command help for the exact syntax:</p>
+<pre>xo-launchpad
+xo-launchpad app --help
+xo-launchpad app create --help</pre>
+<p>Global options work before or after commands: <code>--json</code>, <code>--url</code>, <code>--timeout</code>, <code>--dry-run</code>, and <code>--yes</code>.
+The default API is <strong><a href="https://launchpad-beta-api.xo.builders" target="_blank" rel="noopener">https://launchpad-beta-api.xo.builders</a></strong>.</p>
+<h3>More documentation</h3>
+<ul>
+<li><a href="https://github.com/quirq-ai/launchpad/blob/main/docs/guide.md" target="_blank" rel="noopener">User guide</a>: templates, GitHub workflows, build/push, configuration, domains, and automation.</li>
+<li><a href="https://github.com/quirq-ai/launchpad/blob/main/docs/api.md" target="_blank" rel="noopener">API reference</a>: supported deployment endpoints.</li>
+</ul>
+<h3>Development</h3>
+<pre>python -m pip install -e .
+python -m unittest discover -s tests -v</pre>
+<p>Tests use local mocks; they do not sign in to XO or create live deployments.</p>

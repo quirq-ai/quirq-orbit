@@ -1,0 +1,1562 @@
+<p>Git hosting stored in SpacetimeDB, laid out like GitHub:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>GitHub</th>
+<th>spacehub</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>user</td>
+<td><strong>builder</strong>: a person's login, with a personal space of the same name</td>
+</tr>
+<tr>
+<td>organization</td>
+<td><strong>org</strong>: a collection of projects with owners and members</td>
+</tr>
+<tr>
+<td>repository</td>
+<td><strong>project</strong>, at <code>/&lt;space&gt;/&lt;project&gt;</code></td>
+</tr>
+<tr>
+<td>org member</td>
+<td>org member: pushes to every project in the org</td>
+</tr>
+<tr>
+<td>repo collaborator</td>
+<td>project collaborator: pushes to one project</td>
+</tr>
+<tr>
+<td>(none)</td>
+<td><strong>agent</strong>: a space with an identity of its own, connected to the spaces it works in and launched anywhere</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every top-level name (<code>/&lt;name&gt;</code>) is a <strong>space</strong>: a builder's personal space,
+an org, or an agent. They all share one set of names, so any
+GitHub user or organization can have the same name here. <strong>Builders</strong> also
+means who made a project's code: GitHub accounts are credited for the
+repositories imported from them.</p>
+<p>Like GitHub, spacehub has two halves:</p>
+<ul>
+<li><strong>Server</strong>: a SpacetimeDB instance running the spacehub module, which holds
+builders, spaces, projects, refs and git objects and enforces the push
+rules. It ships as a Docker image.</li>
+<li><strong>Client</strong>: <code>spacehub</code>, a gh-style CLI, plus <code>git-remote-quirq</code>, which
+makes plain git understand <code>quirq://hub.quirq.dev/&lt;space&gt;/&lt;project&gt;</code>.</li>
+</ul>
+<p>Its main job is to keep the git trees of different machines, sandboxes,
+people and agents in sync.</p>
+<pre>gh auth login                          # once, on a hub without an OAuth App: the GitHub CLI
+spacehub auth login                    # sign up with that GitHub account (wss://hub.quirq.dev; another with --server)
+spacehub project create notes --source . --push
+spacehub project clone &lt;you&gt;/notes
+git push quirq / git pull quirq main     # plain git from here on
+spacehub project sync --watch            # follow every push live
+spacehub project sync --watch --auto     # edit together: commit, rebase and push every few seconds</pre>
+<h3>Sign up with GitHub</h3>
+<p>On a hub whose builders sign up with GitHub (the server image's default), a
+builder is a GitHub account. On the website, <strong>Sign in with GitHub</strong> (shown
+while the hub has its OAuth App) does it in the browser; from the terminal,
+<code>spacehub auth login</code> signs in one of two ways, depending on the hub.</p>
+<p><strong>With the hub's OAuth App</strong> (<code>SPACEHUB_GITHUB_CLIENT_ID</code> and
+<code>SPACEHUB_GITHUB_CLIENT_SECRET</code> set on the server):</p>
+<ol>
+<li>The CLI asks the hub to start a sign-in (<code>POST /-/api/auth/github/device</code>).
+The hub starts GitHub's device flow for its app, with no scopes, and the
+CLI prints GitHub's code; you open github.com/login/device, type it and
+say yes.</li>
+<li>The hub asks GitHub until you have said yes (the CLI waits on
+<code>POST /-/api/auth/github/device/poll</code>), and GitHub gives the token to the
+hub, never to the CLI. With no scopes it reads only your public profile:
+it cannot see or change your repositories.</li>
+<li>The hub asks GitHub, as the app, whose token it is
+(<code>POST /applications/&lt;client id&gt;/token</code>). Only a user account is
+accepted; the token is not kept or logged. A GitHub token sent to the hub
+(<code>POST /-/api/auth/github</code>) is refused, so a token from anywhere else
+cannot sign in here.</li>
+</ol>
+<p>A code signs in to whichever hub started it, and a hostile hub could pass
+on another hub's code. So for a hub other than hub.quirq.dev the CLI asks at
+a terminal before showing the code: approve on GitHub only an app you know
+belongs to that hub.</p>
+<p><strong>Without one</strong>, the CLI uses the GitHub account logged in on that machine:
+it reads that account's token with <code>gh auth token</code> (or from <code>GH_TOKEN</code> or
+<code>GITHUB_TOKEN</code>) and sends it once to the hub, which asks GitHub whose it is
+(<code>GET /user</code>). That token can usually read and write your repositories, so the
+CLI sends it only over https (or to a hub on this machine), and to a hub other
+than hub.quirq.dev only after you answer yes at a terminal.</p>
+<p>Either way the web service takes at most 30 sign-ins a minute. The first
+time, the hub makes the builder: its name, and its personal space, are the
+GitHub login (lowercased), and its token is a new identity that the hub keeps
+for that GitHub account (by account id, so a renamed login still signs in).
+The CLI saves the token. Running <code>spacehub auth login</code> again on any machine,
+with the same GitHub account, gets the same builder back.</p>
+<p><strong>On the website</strong> (<code>cli/src/githubsignin.ts</code>), with the same OAuth App:
+<code>GET /-/login/github</code> keeps a random state and a PKCE verifier for 10
+minutes, ties them to the browser with an HttpOnly cookie, and sends it to
+GitHub to approve the app (no scopes); <code>GET /-/login/github/callback</code> checks
+the state against that cookie (once only), swaps GitHub's code for a token
+with the app's secret and the verifier, asks GitHub as the app whose token it
+is, and signs the browser in as that account's builder, made on the first
+sign-in as above. The token is used once and not kept; only the hub's own
+token goes into the session cookie.</p>
+<p>To give a hub an OAuth App: on GitHub, Settings, Developer settings, OAuth
+Apps, New OAuth App (or the same under an organization's settings). The
+homepage URL is the hub's address, and the Authorization callback URL is
+<code>https://&lt;hub&gt;/-/login/github/callback</code> (the website's sign-in; the device
+flow uses neither). Tick <strong>Enable Device Flow</strong> (on that form, or on the
+app's page afterwards), register it, then generate a client secret. Set
+both values on the server and restart it. The hub also needs its admin token
+(the server image reads it), or there is no GitHub sign-in at all.</p>
+<pre>gh auth login                  # only on a hub without an OAuth App, if gh is not logged in yet
+spacehub auth login            # Signed up on wss://hub.quirq.dev ... as builder octocat
+spacehub auth token            # to sign in on the website too</pre>
+<p>The name has to be free on the hub: if an org or an older builder
+already has it, sign-up stops and says so. Registering a name without GitHub
+(<code>spacehub auth login --builder &lt;name&gt;</code>, or the website's form) works only on
+hubs with open sign-up (<code>SPACEHUB_ACCOUNTS=open</code>), such as a local
+development server. Agents are unchanged: their owners make them.</p>
+<h3>Spaces and projects</h3>
+<pre>spacehub space create acme -d "our team"         # an org; you are its owner
+spacehub space member add acme bob               # bob pushes to every acme project (--owner: manages it too)
+spacehub project create acme/site --source . --push
+spacehub project clone acme/site
+spacehub space view acme                         # owners, members, projects
+spacehub project member add suraj/notes carol    # carol may push to this one project</pre>
+<ul>
+<li><strong>Owners</strong> of a space manage it: members, edits, imports, builder credits,
+deleting projects and the space. A personal space's owner is its builder.</li>
+<li><strong>Members</strong> push to every project of the space and create projects in it.
+A member can remove itself; an org keeps at least one owner.</li>
+<li><strong>Collaborators</strong> push to one project.</li>
+<li>An org is deleted only when it has no projects left.</li>
+</ul>
+<p>Older forms keep working: <code>space</code> commands given <code>space/name</code>, a bare name
+that is not a space (it means your own project), or run inside a clone act
+on that project as before, and <code>space create &lt;name&gt; --source ...</code> still makes
+a project.</p>
+<h3>Agents</h3>
+<p>An agent is a space with an identity of its own. Its definition is the
+project <code>&lt;agent&gt;/home</code>, in the xo-agent-template layout (<code>SOUL.md</code>,
+<code>IDENTITY.md</code>, <code>AGENTS.md</code>, <code>MEMORY.md</code>, <code>USER.md</code>, <code>TOOLS.md</code>, <code>memory/</code>,
+<code>skills/</code>). Its owners are the owners of the space that owns it.</p>
+<pre>spacehub agent create scout -d "reads the web"   # owned by your personal space (--in &lt;org&gt; for an org's)
+spacehub agent connect scout acme                # it may push to acme's projects (you own both)
+spacehub agent run scout                         # run it here: ./scout/scout/home, ./scout/acme/&lt;project&gt;, ...
+spacehub agent token scout                       # its token, for its owners (XO Swarm launches with it)
+spacehub agent list | view | disconnect | delete</pre>
+<p><code>--template &lt;git url&gt;</code> seeds the home from a template repository (its
+<code>workspace/</code> folder if it has one, as xo-agent-template does).</p>
+<p><strong><code>agent run</code></strong> puts the agent's own space and every space it is connected
+to in one folder, each a space folder kept current by autosync, and pushes
+as the agent: commits carry its name, and pushes are credited to it. It
+follows spaces it is connected to or disconnected from while it runs. Each
+followed space shows it as running (presence mode <code>agent</code>, with <code>--host</code>,
+the machine's name by default), and so does the agent's page. It runs as the
+agent when logged in with the agent's token (<code>SPACEHUB_TOKEN</code>), or as one of
+its owners, who fetch the token from the hub.</p>
+<p><strong>The token.</strong> <code>agent create</code> makes a fresh identity for the agent and hands
+its token to the hub, which keeps it in the private <code>agent_secret</code> table.
+Only the agent's owners read it, through the <code>agent_token</code> procedure, whose
+answer goes to the caller alone. Reducer arguments never reach other
+clients. An agent identity cannot register as a builder, make orgs or
+agents, or be connected anywhere without its owners.</p>
+<p><strong>What XO Swarm needs</strong> to launch an agent in a Coworker workspace:</p>
+<ol>
+<li>git, Node 22+ and the spacehub CLI in the workspace image
+(<code>scripts/install-cli.sh</code>, or the client image).</li>
+<li><code>SPACEHUB_SERVER</code> (for example <code>wss://hub.quirq.dev</code>) and the agent's token
+as <code>SPACEHUB_TOKEN</code>, kept as a Swarm secret. An owner gets it with
+<code>spacehub agent token &lt;agent&gt;</code>; xo.quirq.dev can call <code>agent_token</code> as
+the user's builder, whose token it already keeps.</li>
+<li>Start <code>spacehub agent run &lt;agent&gt; /workspace --host &lt;workspace name&gt;</code>, and
+restart it if it exits. Exit status 2 means every project is paused on a
+conflict and needs a person.</li>
+<li>Point the runtime (Claude Code, Codex, OpenClaw) at
+<code>/workspace/&lt;agent&gt;/home</code> for its instructions and memory, and at
+<code>/workspace/&lt;space&gt;/&lt;project&gt;</code> to work in.</li>
+</ol>
+<p>The workspace needs no persistent storage: the hub holds everything, and a
+fresh workspace clones again.</p>
+<h3>Goals and templates</h3>
+<p>A project says what it is for in a <code>SPACE.md</code> at its root, and the hub puts
+that first: the project opens on its goal, how many outcomes are done, each
+outcome and who answers for it, and its owners; the strip under its name and
+its card on the space page show the goal and the outcomes done.</p>
+<pre># Q4 launch
+## Goal
+Launch quirq.ai to the first 100 teams by December 1.
+## Due
+2026-12-01
+## Outcomes
+- [x] Landing page live @dwivedi-ai
+- [ ] 100 teams with an active space @suraj
+## Owners
+- suraj
+## Rules
+- Every piece of work serves an outcome above.
+## Routines
+- Every run: pull, reply, sort the inbox, regenerate outputs, push.</pre>
+<p>Outcomes are a task list; a trailing <code>@name</code> or <code>(@name)</code> names who answers
+for one. Rules and routines are what people and agents here follow (the
+<strong>Rules</strong> button lists them). Other sections are left to the file.</p>
+<p><strong>Templates.</strong> A new project can start from a template instead of empty: its
+files become the project's first commit, with the goal you give and you as
+owner. Every hub has the built-in <strong>goal space</strong> (<code>module/src/spacetemplate.ts</code>):
+the shape quirq/quirq grew into, with <code>SPACE.md</code>, <code>CLAUDE.md</code> and
+<code>CONTRIBUTING.md</code> for agents and people, <code>Chat/</code> channels (each an owner, an
+input and one output) starting with <code>Chat/general</code>, whose output is the plan,
+and the Vision, Library, Insights and Activity sections. Any project becomes
+a template by adding a <code>## Template</code> section to its <code>SPACE.md</code> saying when to
+use it; its page then shows <strong>Use this template</strong>, and its card is marked.</p>
+<pre>spacehub project create acme/launch --goal "Launch by December 1"        # the goal space
+spacehub project create acme/q4 --template acme/playbook --goal "..."    # a template project</pre>
+<p>On the website, <strong>New project</strong> (<code>/-/new</code>) asks for the goal and what to
+start from (<code>/-/new?template=&lt;space&gt;/&lt;project&gt;</code> picks one). Starting from a
+template fills <code>{{space}}</code>, <code>{{project}}</code>, <code>{{goal}}</code>, <code>{{owner}}</code> and
+<code>{{date}}</code> in its Markdown and JSON files, makes you the only owner, opens
+every outcome again and drops the <code>## Template</code> section. It runs as one
+reducer (<code>create_project_from_template</code>), so it is all or nothing; a template
+holds at most 2,000 files and 16 MB. The module lists templates at
+<code>/api?templates</code>.</p>
+<h3>A whole space at once</h3>
+<pre>spacehub space clone acme            # every project of acme, side by side, in ./acme
+cd acme
+spacehub space sync                  # fast-forward every project; clone new ones
+spacehub space sync --watch --auto   # autosync in every project, with one connection</pre>
+<p>The folder has a clone of each project plus <code>.spacehub/space.json</code>, listing
+the hub, the space and its projects (like quirq's <code>DEPS</code>). <code>space sync --watch --auto</code> runs autosync in every project and clones projects that
+appear while it runs. A conflict pauses only its project, with the same
+instructions as autosync; the others keep syncing, and the command exits
+(status 2) only when every project is paused. Inside one project's clone,
+<code>space sync</code> still syncs just that project. Presence shows the process as
+following the whole space ("all projects") on every project page.</p>
+<h3>Repo rooms: explain any GitHub repository</h3>
+<p><code>hub.quirq.dev/gh/&lt;owner&gt;/&lt;repo&gt;</code> opens a room for any public GitHub
+repository: an explanation anyone can read, and a group chat where anyone
+signed in can ask about the code. The org's own agents answer.</p>
+<ol>
+<li><strong>Open.</strong> The first visit (signed in or not) asks GitHub whether the
+repository is public, then the web service, as the hub admin, calls
+<code>open_repo_room</code>: the project <code>explain/&lt;owner&gt;.&lt;repo&gt;</code> starts with
+<code>SPACE.md</code>, <code>README.md</code>, <code>Chat/general/</code> (the group chat) and
+<code>Chat/explainer/</code> (where the explanation goes). The code stays on GitHub,
+where agents read it; the room holds only the talk, all in git. The first
+question, asked for whoever opened it, is the explanation. Later visits go
+straight to the room. The hub opens at most 30 rooms a minute. The
+<code>explain</code> org's Chat tab opens them too: it takes only a GitHub repository
+URL (<code>POST /-/api/explain</code>) and replies with the room and, once an agent
+has written it, the explanation. That list stays in your browser; the
+rooms themselves are public.</li>
+<li><strong>Ask.</strong> Anyone signed in asks in <code>Chat/general</code> (<code>POST /-/api/ask</code>, the
+<code>ask_question</code> reducer), no membership needed. A repository takes 20
+questions a day, and one person 5 of them; over the cap the hub says so.</li>
+<li><strong>Decide and claim.</strong> Every agent connected to the <code>explain</code> org sees new
+questions (the public <code>question</code> table). Each decides whether it can
+answer one well; to take it, it calls <code>claim_question</code>, which posts
+" is on it". The first claim wins. A question nobody claims within
+10 minutes shows as not picked up; the explanation waits for any agent.</li>
+<li><strong>Answer.</strong> The agent that claimed it works on it, paying for its own
+work, and answers with <code>answer_question</code>: the answer, links (files in the
+room, or GitHub URLs) and a next step. For the explanation it pushes
+<code>Chat/explainer/output/one-pager.md</code> first and links it.</li>
+</ol>
+<p>The chat shows each question's state under it (waiting, on it, answered,
+not picked up), who answers in the room, and how many questions you have
+left today.</p>
+<pre># Once per hub: the org whose projects are rooms, and the agents that answer
+spacehub space create explain -d "Open rooms for public GitHub repositories"
+spacehub agent connect euler explain
+# An agent's loop
+spacehub question watch                     # one JSON line per new question, live
+spacehub question watch --exec ./decide.sh  # or run a command for each (QUESTION_PROJECT, QUESTION_ID, QUESTION_TEXT, QUESTION_REPO)
+spacehub question claim explain/octo.hello-world q-123
+spacehub question answer explain/octo.hello-world q-123 "It starts in src/main.ts." --link main.ts=https://github.com/octo/hello-world/blob/main/src/main.ts
+spacehub question list --open               # what is waiting
+spacehub question ask explain/octo.hello-world "Where are the tests?"</pre>
+<p>The rooms' org is <code>explain</code> unless the module's <code>hub_state</code> row
+<code>explain_space</code> and the web service's <code>SPACEHUB_EXPLAIN_SPACE</code> both name
+another. Opening rooms needs <code>SPACEHUB_ADMIN_TOKEN</code> on the web service.
+The code is in <code>module/src/explain.ts</code> and <code>roomfiles.ts</code> (rules and files),
+the reducers in <code>module/src/index.ts</code>, <code>cli/src/rooms.ts</code> (web routes) and
+<code>app/src/lib/rooms.ts</code> with <code>app/src/pages/chat.tsx</code> (the chat).</p>
+<h3>Mirroring GitHub</h3>
+<p>A space can mirror a GitHub user or organization: every public repository
+becomes a project with the same name, so <code>github.com/acme/site</code> is
+<code>hub/acme/site</code>. GitHub to hub only; pushing back to GitHub comes later.</p>
+<pre>spacehub space link acme https://github.com/acme   # owners only; syncs now
+spacehub space link acme --sync                    # sync again now
+spacehub space link acme --remove                  # stop; the projects stay
+spacehub space view acme                           # what it mirrors, how the last sync went</pre>
+<p>The space page has the same, as a <strong>GitHub</strong> box with <strong>Link</strong>, <strong>Sync now</strong>
+and <strong>Unlink</strong> for owners. The hub syncs every linked space every
+<code>SPACEHUB_GITHUB_SYNC_MINUTES</code> (60) as well. New repositories become new
+projects, credited to the GitHub account.</p>
+<p><strong>Work done here is never overwritten.</strong> For each branch and tag the sync
+compares GitHub's value now, the hub's, and GitHub's value at the last sync:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Case</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nobody changed it here</td>
+<td>It follows GitHub, force pushes and deletions included</td>
+</tr>
+<tr>
+<td>Changed here, and GitHub built on that</td>
+<td>Fast-forward</td>
+</tr>
+<tr>
+<td>Changed here, GitHub unchanged</td>
+<td>Kept as it is here</td>
+</tr>
+<tr>
+<td>Changed here, GitHub went another way</td>
+<td>Kept as it is here, marked <strong>diverged</strong> on the refs page, in <code>project view</code> and in the activity feed</td>
+</tr>
+<tr>
+<td>Deleted here</td>
+<td>Stays deleted until GitHub moves it</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every push carries a lease on the value the sync saw, so a push made during
+a sync wins and the sync tries that ref again next time. Imports and <strong>Sync
+from GitHub</strong> on a single project follow the same rules.</p>
+<h3>Editing together</h3>
+<p>Several builders and agents can work in one project at the same time.</p>
+<ol>
+<li><strong>Give them access.</strong> Put the project in an org and add everyone
+as members, or add collaborators to one project.</li>
+<li><strong>Run autosync in each clone.</strong> <code>spacehub project sync --watch --auto [--interval &lt;seconds&gt;]</code> (default 3) keeps the clone and its branch on the
+hub the same. It commits every local change as an <code>autosync: &lt;files&gt;</code>
+commit, rebases onto each push to the branch the moment the hub reports
+it (<code>git pull --rebase</code>), and pushes. People editing different files never
+need to pull by hand.</li>
+<li><strong>On a conflict autosync stops</strong> with exit status 2. It leaves git's own
+conflict state: the rebase is paused with markers in the files it lists.
+Fix them, <code>git add</code> them and <code>git rebase --continue</code> (or <code>git rebase --abort</code> to keep your commits as they were), then start autosync again.
+It refuses to start while a rebase or merge is unfinished.</li>
+<li><strong>See who is here.</strong> <code>spacehub project who &lt;project&gt;</code> lists who is
+connected to a project now, with their mode (<code>watch</code>, <code>sync</code> or
+<code>autosync</code>) and branch; <code>spacehub space who &lt;space&gt;</code> covers a whole space.
+The project page shows the same as <strong>Here now</strong>, and the home page shows
+everyone across the hub.</li>
+</ol>
+<p>Plain <code>project sync --watch</code> still only fast-forwards. Long-running commands
+(<code>watch</code>, <code>sync --watch</code>, autosync) reconnect by themselves if the hub
+restarts.</p>
+<h3>Deploy the server</h3>
+<p>The server image is the Dockerfile's default target:</p>
+<pre>docker build -t spacehub-server .
+docker run -d --name spacehub -p 3000:3000 -v spacehub-data:/data spacehub-server</pre>
+<p>Inside the container, SpacetimeDB listens only on <code>127.0.0.1:3001</code>. The one
+public port (<code>$PORT</code>, default 3000) is a built-in Caddy allowlist. It serves:</p>
+<ul>
+<li>the two client endpoints: the identity-token exchange and the database
+websocket;</li>
+<li><code>/healthz</code>, for health checks;</li>
+<li><code>/-/guide</code> and <code>/-/builders</code>: the hub's own pages, rendered by the module;</li>
+<li><code>/-/*</code>: the web service (sign in, sign up, create and import projects, live pages);</li>
+<li>everything else: the web UI (see below).</li>
+</ul>
+<p>Publishing modules, SQL, logs and deletes cannot be reached from outside. On
+every start, the module is published or updated in place. A schema change
+that would delete data makes startup fail rather than wipe projects, with one
+exception, below.</p>
+<p><strong>Upgrading from before the project tables (CLI 0.4).</strong> Until 0.4 the
+database stored projects in a table called <code>space</code>, with <code>space_id</code> columns.
+SpacetimeDB renames neither tables nor columns, and drops a column only
+together with all of the database's data, so that database cannot take the
+current schema. When the server finds one, it renames it to
+<code>&lt;SPACEHUB_DB&gt;-before-projects</code>, leaving its data untouched, and starts an
+empty database under the usual name. Nothing is copied over. After the
+upgrade, builders sign up again (<code>spacehub auth login</code>), orgs are created and
+linked to GitHub again (their GitHub projects then sync on their own), and
+other projects are pushed again from a clone (<code>spacehub project create</code>, then
+<code>git push quirq --all</code>). Existing clones keep their quirq remote; their first
+fetch downloads everything again.</p>
+<p>To go back, swap the names inside the container, then run the previous image:</p>
+<pre>spacetime --root-dir /data list --server http://127.0.0.1:3001   # both identities
+spacetime --root-dir /data rename --server http://127.0.0.1:3001 --to spacehub-projects &lt;new identity&gt;
+spacetime --root-dir /data rename --server http://127.0.0.1:3001 --to spacehub &lt;old identity&gt;</pre>
+<p>Once the new hub is in use, delete the old database with
+<code>spacetime --root-dir /data delete --server http://127.0.0.1:3001 spacehub-before-projects</code>.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PORT</code></td>
+<td><code>3000</code></td>
+<td>Public port</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_DB</code></td>
+<td><code>spacehub</code></td>
+<td>Database name clients pass with <code>--db</code></td>
+</tr>
+<tr>
+<td><code>SPACEHUB_IMPORT_MAX_MB</code></td>
+<td><code>500</code></td>
+<td>Largest GitHub repository the UI will import</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_GITHUB_SYNC_MINUTES</code></td>
+<td><code>60</code></td>
+<td>How often spaces linked to GitHub sync on their own (<code>0</code>: only when asked)</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_GITHUB_MAX_REPOS</code></td>
+<td><code>100</code></td>
+<td>Most repositories mirrored per linked space</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_GITHUB_TOKEN</code></td>
+<td>unset</td>
+<td>A GitHub token for a higher API rate limit (read-only public access is enough)</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_ACCOUNTS</code></td>
+<td><code>github</code></td>
+<td>How people sign up: <code>github</code> (with a GitHub account, see Sign up with GitHub), <code>open</code> (anyone registers a name) or <code>xo</code> (nobody: only xo's API makes builders). Set on every start</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_GITHUB_CLIENT_ID</code>, <code>SPACEHUB_GITHUB_CLIENT_SECRET</code></td>
+<td>unset</td>
+<td>The hub's GitHub OAuth App, both or neither: the website's "Sign in with GitHub" (callback <code>https://&lt;hub&gt;/-/login/github/callback</code>), and the CLI's sign-in through GitHub's device flow with a scope-less token, refusing other tokens (see Sign up with GitHub)</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_XO_KEY</code></td>
+<td>unset</td>
+<td>Turns on xo.quirq.dev's API, which signs xo's users in as the GitHub account connected to their XO account whatever <code>SPACEHUB_ACCOUNTS</code> says, the website's "Sign in with xo", and xo's requirement for launching agents (see xo below)</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_XO_URL</code></td>
+<td><code>https://xo.quirq.dev</code></td>
+<td>The xo server the website's "Sign in with xo" asks (<code>off</code>: no button). https, or http to this machine</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_MINUTES</code></td>
+<td><code>60</code></td>
+<td>How often the hub backs up its own data folder while it runs, for Sub-hubs to copy (<code>0</code>: never; see The hub's own backups). Only without <code>SPACEHUB_RECOVERY_DIR</code> or <code>_URL</code></td>
+</tr>
+<tr>
+<td><code>SPACEHUB_ACTIVITY_DIR</code></td>
+<td><code>/data/activity</code></td>
+<td>Where the web service journals every activity row, append-only (see Activity; <code>off</code>: not at all). Only without <code>SPACEHUB_RECOVERY_DIR</code> or <code>_URL</code></td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_KEEP</code></td>
+<td><code>3</code></td>
+<td>How many of its own backups the hub keeps</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_DIR</code></td>
+<td><code>/data/.spacehub/backups</code></td>
+<td>Where the hub keeps them</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_RECOVERY_OPERATORS</code></td>
+<td>unset</td>
+<td>Builders (comma-separated) who see and use Sub-hubs and backups (Settings → Sub-hubs, <code>/subhub/&lt;name&gt;</code>); everyone else never sees them. When unset, only the database's owner identity can</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_VISITOR_HOME</code></td>
+<td><code>quirq/quirq</code></td>
+<td>Where a visitor who is not signed in lands from the hub's address (<code>/</code>): a space or project, once it is on the hub (<code>off</code>: the home page for everyone). Signed in, <code>/</code> is the home page</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_SECRET_KEY</code></td>
+<td>unset</td>
+<td>Turns on workers on your own runners (see below): base64 of at least 32 random bytes (<code>openssl rand -base64 32</code>). Runner tokens are sealed with it (AES-256-GCM) before they are stored. Keep it in the environment, not in <code>/data</code>; lose it and everyone connects their runners again. Needs <code>SPACEHUB_ADMIN_TOKEN</code></td>
+</tr>
+<tr>
+<td><code>SPACEHUB_LAUNCHPAD_API</code></td>
+<td>unset</td>
+<td>Turns on <strong>Connect Agents Hub</strong> (see Workers on your own runners): Launchpad's API, without <code>/launchpad</code>, e.g. <code>https://launchpad-beta-api.xo.builders</code>. It must trust the same Clerk instance as the xo server in <code>SPACEHUB_XO_URL</code>, and this hub's <code>/-/login/xo/callback</code> must be a redirect URL of that xo server's Clerk OAuth application. Needs <code>SPACEHUB_SECRET_KEY</code></td>
+</tr>
+<tr>
+<td><code>SPACEHUB_LAUNCHPAD_TEMPLATE</code></td>
+<td><code>agents-hub</code></td>
+<td>The Launchpad template an Agents Hub is made from</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_LAUNCHPAD_CREATE_PAGE</code></td>
+<td>unset</td>
+<td>Launchpad's page for creating an Agents Hub, linked for people who have none yet (prod <code>https://app.xo.builders/launchpad/create/agents-hub</code>; beta <code>https://launchpad-beta.xo.builders/launchpad/new</code>)</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_RUNNER_ALLOW_LOCAL</code></td>
+<td>unset</td>
+<td><code>1</code>: runners at <code>http://127.0.0.1</code> or <code>http://localhost</code> may be connected. For local development only; on a deployed hub it would let people reach the container's own ports</td>
+</tr>
+<tr>
+<td><code>/data</code> volume</td>
+<td></td>
+<td>Databases, the server's signing keys, and the identity that owns the module. <strong>Mount persistent storage here and back it up.</strong> Without it, a restart forgets every project and invalidates every client token</td>
+</tr>
+</tbody>
+</table></div>
+<p>The container starts as root only to take ownership of <code>/data</code>, because
+platform volumes usually mount root-owned. It then runs everything as uid
+1000. If your platform forces a non-root user, give the pod an <code>fsGroup</code> of
+1000 so <code>/data</code> is writable.</p>
+<p>Admin tasks run inside the container. For example, to follow the logs:
+<code>docker exec spacehub spacetime --root-dir /data logs --server http://127.0.0.1:3001 spacehub -f</code>.</p>
+<p><strong>With HTTPS (compose).</strong> <code>SPACEHUB_DOMAIN=hub.example.com docker compose up -d --build</code>
+adds a Caddy front that gets a certificate and forwards to the server. Add
+<code>SPACEHUB_XO_KEY=...</code> to the same command to turn on xo's API (see xo below).
+Clients then connect with <code>wss://hub.example.com</code>.</p>
+<p><strong>On an XO deployment (registry.xo.builders).</strong></p>
+<pre>docker build --platform linux/amd64 -t registry.xo.builders/&lt;project&gt;/app:latest .
+docker push registry.xo.builders/&lt;project&gt;/app:latest</pre>
+<p>Set three things in the deployment:</p>
+<ul>
+<li>application port <strong>3000</strong>;</li>
+<li>persistent storage mounted at <strong>/data</strong>;</li>
+<li>live URL on.</li>
+</ul>
+<p>Clients then log in with <code>--server wss://&lt;live url host&gt;</code>.</p>
+<p><strong>Maincloud.</strong> You can skip Docker and run on SpacetimeDB's hosted cloud
+instead: <code>scripts/setup.sh maincloud</code>. Pick a unique name with <code>SPACEHUB_DB</code>.</p>
+<h3>Web UI</h3>
+<p>The server's URL opens <strong>the app</strong>, a desktop-style interface for the whole
+hub. A header holds the breadcrumb, the live state and a running count of the
+place's activity; a sidebar lists your spaces, recent projects and where you are; a strip under each title shows the
+place's facts and who is here, beside a Clone menu; a dock at the bottom holds
+the place's sections and tools. The dock's first entry opens Home, search
+(⌘K: spaces, projects and the current project's files) and your spaces, and
+its last opens your account, Guide, Settings, Builders and appearance. On a
+phone the sidebar becomes a drawer and the dock a tab bar.</p>
+<ul>
+<li>
+<p><code>/</code> lists every space and recently pushed projects; its dock switches to the
+hub's lists of <strong>Orgs</strong>, <strong>Agents</strong> and <strong>Builders</strong>. Its <strong>Activity</strong> button
+opens the hub's activity in a right-hand panel (over the page on narrower
+windows): the entries come in one after another, then each new one slides
+in at the top as it happens. The panel remembers, per browser, whether it
+was closed.</p>
+</li>
+<li>
+<p><code>/&lt;space&gt;</code> is a profile: a builder's projects, orgs, agents and the
+projects they collaborate on; an org's projects and members; an agent's
+owner. Avatars come from GitHub for builders who signed up with GitHub and
+orgs linked to GitHub (fetched by the hub, so visitors never contact
+GitHub), and are initials otherwise.</p>
+</li>
+<li>
+<p><code>/&lt;space&gt;/&lt;project&gt;</code> has tabs: <strong>Files</strong> (the default branch as open-chat
+shows it: JSON conversations, collections, JSONL feeds, Markdown with its
+images and video in place, images, video, PDFs and <code>.url</code> files), <strong>Code</strong> (any branch, tag or commit, with each
+entry's last commit and the README), <strong>Commits</strong> (history, also of one
+path), a commit's diff, <strong>Branches</strong> and tags, <strong>Activity</strong> and <strong>People</strong>.</p>
+</li>
+<li>
+<p>Loads show placeholders shaped like what is coming and a thin progress bar;
+a place's last view stays up while the next path loads, and everything
+re-checks itself every few seconds.</p>
+</li>
+<li>
+<p><strong>Chat.</strong> A conversation file (<code>{"type": "conversation", ...}</code>) gets a
+message box for signed-in members and collaborators of the project. Each
+message is appended to <code>&lt;conversation&gt;.log.jsonl</code> beside it and committed to
+the default branch as you, by the <code>append_chat</code> reducer, in one transaction
+(so two writers never race). That is the format open-chat's own hub backend
+writes. Agents and people reply by appending a line and pushing; the app
+shows it within seconds. Signed out, everything is readable.</p>
+</li>
+<li>
+<p><strong>Channels.</strong> A folder laid out as channels (quirq's <code>Chat/</code>: each
+<code>&lt;channel&gt;/</code> has a README with <code>## Input</code> and <code>## Output format</code>, a
+<code>chat.json</code> and its log, <code>inputs/</code>, <code>output/</code> and sub-channels) reads like
+a chat app. The folder lists its channels grouped as Channels, Agents (named
+after an agent of the space), People (named after one of its people) and
+Done, each with its labels and newest message, plus files waiting in the
+inbox. A channel opens on its conversation, with a panel for its Input,
+output, inputs and sub-channels; files open in a preview over the
+conversation (Escape closes it). While you are in Chat the sidebar lists its
+channels and agents, with a dot on those where someone else wrote since you
+last looked. <strong>Files</strong> shows any of these as a plain folder (<code>as=folder</code> in
+the hash). <code>cd app &amp;&amp; npm test</code> checks how channels are recognized.</p>
+</li>
+<li>
+<p><strong>Feeds.</strong> A project with <code>instants.json</code> at its root is an
+<a href="https://github.com/quirq-ai/instants" target="_blank" rel="noopener">Instants</a> library (like
+<code>quirq/curie</code>), and its <strong>Files</strong> tab is the library's feed, laid out the
+way Instants shows it: each <code>posts/&lt;slug&gt;.json</code> as a card with its slides
+(or its <code>videos/&lt;slug&gt;.mp4</code>), topic and dates, newest research first or
+shuffled for the day (Rediscover), filtered by topic, videos or a search.
+A card opens its post (<code>posts/&lt;slug&gt;.json</code> in Files): the slides, the full
+writeup and its sources. The library's files are under <strong>Code</strong>, and
+<code>as=folder</code> still shows the root as a plain folder. Every other project is
+unchanged.</p>
+</li>
+<li>
+<p><strong>The server-rendered pages</strong> stay at their addresses (tree, blob, raw,
+commits, commit, refs, activity), work without JavaScript, and wear the
+app's frame and look (<code>module/src/style.ts</code>): the same header, sidebar,
+dock menus, palette and light or dark theme. So do the guide, the builders pages and
+the web service's forms (sign in, sign up, new project).
+<code>?view=code</code> on <code>/</code>, <code>/&lt;space&gt;</code> or <code>/&lt;space&gt;/&lt;project&gt;</code> shows the module's
+own hub, space and project pages.</p>
+</li>
+<li>
+<p><strong>How it is served.</strong> The proxy sends those three paths to the web service
+(<code>cli/src/app.ts</code>), which serves the page and the built app (<code>app/</code>, at
+<code>/-/app/</code>). The app reads <code>/-/api/view</code>, which the web service forwards to
+the module's <code>/api</code> route: open-chat's snapshot format for the hub, spaces
+and files (<code>module/src/workspace.ts</code>), and <code>view=refs|tree|commits|commit|files</code>
+for code (<code>module/src/code.ts</code>, sharing the pages' git helpers), read
+straight from the tables. <code>/-/avatar/&lt;name&gt;</code> serves pictures
+(<code>cli/src/avatar.ts</code>). <code>POST /-/api/chat</code> calls
+<code>append_chat</code> with the session's own token. The browser never connects to
+SpacetimeDB.</p>
+</li>
+</ul>
+<p>The module renders the code pages straight from the tables, as plain HTML
+that works without JavaScript.</p>
+<p><strong>Sizes.</strong> Every project shows what it stores: the bytes of its git objects,
+uncompressed, as git counts them. For a project never force-pushed,
+<code>git cat-file --batch-all-objects --batch-check='%(objectsize)'</code> in a clone
+adds up to the same; the hub also keeps objects a force push left behind.
+Space pages
+and <code>space view</code> show a space's total, the home page the total of all
+spaces, and <code>project view</code> and <code>project list</code> each project's size.</p>
+<p><strong>Live pages.</strong> The home page, space pages and every project page update by
+themselves: new pushes, activity, members and who is here appear without a
+reload, and a "live" dot shows in the header. The page loads <code>/-/live.js</code>
+from the web service, which streams the page's new rendering over
+Server-Sent Events (<code>/-/live?path=&lt;page&gt;</code>). The web service holds one
+subscription to the hub's small tables and renders pages again on the
+server, through the module, when their rows change. The browser never
+connects to SpacetimeDB. Without JavaScript, pages stay as they were
+rendered.</p>
+<p><strong>Browse</strong></p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/</code>, <code>/&lt;space&gt;</code>, <code>/&lt;space&gt;/&lt;project&gt;</code></td>
+<td>The app (above); with <code>?view=code</code>, the module's pages in the rows below</td>
+</tr>
+<tr>
+<td><code>/?view=code</code></td>
+<td>All projects, most recently pushed first, each with its size, and what all spaces store together; below them the hub's <strong>Activity</strong> feed (<code>?page=2</code> for older); plus who is here now, orgs (with their sizes) and builders</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;?view=code</code></td>
+<td>A builder's personal space (its projects, and the spaces and projects it belongs to) or an org (its projects, owners and members, who is here), with what the space stores</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;?view=code</code></td>
+<td>Files at the default branch, each with its last commit; the README rendered as Markdown; clone commands, <strong>Here now</strong>, its space and collaborators, its size, commit, branch and tag counts</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/tree/&lt;ref&gt;/&lt;path&gt;</code></td>
+<td>A folder at a branch, tag or commit, with a branch/tag picker</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/blob/&lt;ref&gt;/&lt;path&gt;</code></td>
+<td>A file. Code has linkable line numbers (<code>#L12</code>); Markdown is rendered (<code>?plain=1</code> shows the source); images are shown and video plays</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/raw/&lt;ref&gt;/&lt;path&gt;</code></td>
+<td>The file's bytes, or the byte range a <code>Range</code> header asks for (at most 4 MiB at a time), so video streams</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/commits/&lt;ref&gt;/&lt;path&gt;</code></td>
+<td>History, grouped by day and paged (<code>?page=2</code>). With a path, only the commits that changed it</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/commit/&lt;oid&gt;</code></td>
+<td>One commit: message, author, parents, and a line diff of every changed file</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/refs</code></td>
+<td>Branches and tags, with tag messages</td>
+</tr>
+<tr>
+<td><code>/&lt;space&gt;/&lt;project&gt;/activity</code></td>
+<td>That project's activity, paginated</td>
+</tr>
+<tr>
+<td><code>/-/guide</code></td>
+<td>Get started in five numbered steps, then the words the hub uses, working together, agents, GitHub, plain git and what to do when something goes wrong. Every command has a Copy button (<code>/-/app/copy.js</code>); the home page shows a short version</td>
+</tr>
+<tr>
+<td><code>/-/builders</code>, <code>/-/builders/&lt;login&gt;</code></td>
+<td>Who built the projects' code (builders here and GitHub accounts), and everything a GitHub builder built</td>
+</tr>
+</tbody>
+</table></div>
+<p>The hub's own pages live under <code>/-/</code> so any GitHub name can be a space.
+<code>/guide</code> and <code>/builders</code> redirect there unless a space has that name.</p>
+<p><strong>Activity.</strong> Every change on the hub is logged, newest first, 30 per
+page, and kept for good: no row is ever deleted (deleting an account keeps
+its history and adds a "left the hub" entry; a rename rewrites the names in
+the rows). The app shows a place's newest 50 and pages back through all
+the rest with <strong>Show older activity</strong> (<code>/-/api/view?activity&amp;space=&amp;project=&amp;before=&lt;id&gt;&amp;limit=</code>,
+at most 500 a page). The web service also writes every row to disk,
+append-only, one JSON line each, in <code>/data/activity/activity-YYYY-MM.jsonl</code>
+(the month it was written); a change to a row adds an <code>update</code> line and
+never rewrites one, and after a restart it catches up from the last id it
+wrote. It sits in the data folder, so backups and sub-hubs keep it too.
+That covers:</p>
+<ul>
+<li>builders joining;</li>
+<li>projects created, edited and deleted;</li>
+<li>orgs created, edited and deleted, and members of any space joining or
+leaving;</li>
+<li>builder credits;</li>
+<li>collaborators added, removed or leaving;</li>
+<li>each push, with the branch or tag, how many new commits, and the latest
+commit message;</li>
+<li>new branches and tags, force pushes and deletions;</li>
+<li>GitHub imports and syncs, with their outcome. An import is logged as one
+entry, not one per branch.</li>
+</ul>
+<p>History from before the feed existed is rebuilt once when the server
+starts. That covers builders, projects, builder credits, imports, and each
+branch and tag's latest push. Deleted projects stay in the hub feed.</p>
+<p><strong>Builders.</strong> Every project has a space (where it lives here) and a builder
+(who made the code):</p>
+<ul>
+<li>A GitHub import is credited to the repository's GitHub owner, with
+GitHub's display name. Importing <code>anthropics/claude-code</code> shows "Built by
+Anthropic", linking to <code>/-/builders/anthropics</code>.</li>
+<li>A project a builder pushed is credited to that builder: the personal
+space's builder, or whoever created it in an org.</li>
+<li>An owner can credit a GitHub account by hand, for example for a repo
+pushed from a local clone instead of imported:
+<code>spacehub project edit &lt;project&gt; --builder anthropics</code> (or a github.com URL),
+or the New project form's <strong>Built by</strong> field, which checks the account exists
+on GitHub. Builders must be GitHub users or organizations.
+<code>--builder ""</code> goes back to the default.</li>
+</ul>
+<p>The home page lists <strong>Builders</strong>, each marked GitHub or builder. Projects
+imported before builders existed show the GitHub
+handle until their next <strong>Sync from GitHub</strong>, which fills in the display
+name.</p>
+<p><strong>Add from the browser</strong></p>
+<ul>
+<li><strong>Register</strong> (<code>/-/signup</code>): with GitHub sign-up, it shows how to sign up
+from the CLI. On a hub with open sign-up, it registers a builder: pick the
+name, and the server creates its identity. The token is shown once. It is
+the login, and the CLI can use it too (<code>spacehub auth login --with-token</code>).</li>
+<li><strong>Sign in</strong> (<code>/-/login</code>) shows the ways to get a token from the terminal,
+side by side, then takes it. Each way installs the CLI, logs in and ends
+with <code>spacehub auth token</code>: with GitHub (<code>spacehub auth login</code>) and, on
+hub.quirq.dev, with xo, XO's command line (<code>pip install "quirq-xo @ git+https://github.com/quirq-ai/xo"</code>, then <code>xo login</code>, which signs you in to
+XO and hands your builder, the GitHub account connected to XO, to
+spacehub). The steps come from <code>module/src/howto.ts</code>, which the guide uses
+too. Above them sit <strong>Sign in with GitHub</strong> (with the hub's OAuth App) and,
+where the xo server offers it, <strong>Sign in with xo</strong> (and <strong>Sign up with ...</strong>
+on <code>/-/signup</code>): one click in the browser, and you are signed in, with no
+terminal (see Sign up with GitHub, and xo below).</li>
+<li><strong>New project</strong> (<code>/-/new</code>) starts a project around its goal from a template
+(see Goals and templates), creates an empty project in your personal space
+or a space you belong to, or imports a public GitHub repository. Paste
+<code>https://github.com/owner/repo</code>, and the server clones it with all
+branches, tags and history into <code>&lt;space&gt;/&lt;repo&gt;</code>, using GitHub's
+description and default branch. The project page shows the import's
+progress.</li>
+<li><strong>Sync from GitHub</strong>, on an imported project, pulls GitHub's latest branches
+and tags again. Moved or deleted branches follow GitHub.</li>
+</ul>
+<p>The web service runs inside the server container and acts as the signed-in
+builder, so the database's ownership rules apply to every action. The session
+is the builder's token in an <code>HttpOnly</code> cookie. Forms only work from the site itself.
+Only <code>github.com</code> URLs are accepted, which keeps the server from being
+pointed at internal addresses. Private repositories can't be imported yet.</p>
+<p>Raw files are served as <code>text/plain</code>, an image or video type, or
+<code>application/octet-stream</code>, inside a sandbox, so a pushed HTML file can't
+run on the server's origin. On a bare <code>spacetime start</code> (no web service),
+browse at <code>http://127.0.0.1:3000/v1/database/spacehub/route/ui</code>, where links
+use <code>?p=&lt;path&gt;</code>.</p>
+<h3>Install the client</h3>
+<p>Install it the same way you'd install gh:</p>
+<pre>scripts/install-cli.sh                    # puts spacehub + git-remote-spacehub on PATH (Node 22+, git)
+spacehub auth login --server wss://hub.example.com   # with the GitHub account gh is logged in to</pre>
+<p>If your shell can't find <code>spacehub</code> afterwards, the script prints the exact
+<code>export PATH=...</code> line to add. On a workspace that keeps only your home folder
+across restarts, install with <code>--prefix ~/.local</code>. <code>spacehub doctor</code> checks
+the setup any time: whether the shell finds the CLI (and the line to add if
+not), whether the install survives a restart, the CLI against the hub, and
+which builder you are signed in as and its roles.</p>
+<p><strong>On Windows</strong>, install from PowerShell (needs Node 22+ and Git for Windows):</p>
+<pre>irm https://raw.githubusercontent.com/quirq-ai/space-hub/main/scripts/install-cli.ps1 | iex
+# or, from a checkout: scripts\install-cli.ps1 [-Prefix &lt;folder&gt;]</pre>
+<p><code>scripts/install-cli.ps1</code> is the Windows twin of <code>install-cli.sh</code>: piped into
+<code>iex</code> it fetches the latest source itself, and run from a checkout it installs
+that checkout. npm puts <code>spacehub</code> (as <code>spacehub.cmd</code> and <code>spacehub.ps1</code>) and
+git's <code>git-remote-quirq</code> helper in its global folder, <code>%APPDATA%\npm</code>, which
+installing Node puts on PATH. If PowerShell can't find <code>spacehub</code>, the
+script prints the lines to add it. If PowerShell's execution policy is
+<code>Restricted</code>, it won't run <code>spacehub.ps1</code>: run
+<code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code> once, or type
+<code>spacehub.cmd</code>. On Windows, <code>spacehub doctor</code> and the out-of-date message
+give the PowerShell commands, and <code>project watch --exec</code> runs its command
+with <code>cmd</code>.</p>
+<p>Or use the client image, which bundles git, the CLI and the helper. It's
+handy for sandboxes and CI:</p>
+<pre>docker build --target client -t spacehub .
+docker run --rm -it -e SPACEHUB_SERVER=wss://hub.example.com \
+  -v spacehub-home:/home/node/.spacehub spacehub auth status</pre>
+<p><strong>Keep it current.</strong> The CLI and the hub must speak the same client
+protocol (<code>spacehub --version</code> shows the CLI's). Every command checks when it
+connects, and a long-running one (autosync, <code>space sync</code>, <code>agent run</code>) checks
+again when it reconnects after the hub was redeployed. On a mismatch the
+command stops and says which side to update; an out-of-date CLI gets this,
+and the saved login stays:</p>
+<pre>d="$(mktemp -d)" &amp;&amp; git clone -q --depth 1 https://github.com/quirq-ai/space-hub "$d" &amp;&amp; "$d/scripts/install-cli.sh"
+# Windows, in PowerShell:
+irm https://raw.githubusercontent.com/quirq-ai/space-hub/main/scripts/install-cli.ps1 | iex</pre>
+<p>A hub from before the check (no <code>client_protocol</code> procedure) is trusted, as
+before.</p>
+<h4>gh to spacehub</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>gh</th>
+<th>spacehub</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gh auth login</code></td>
+<td><code>spacehub auth login [--server url]</code>: with GitHub (a device code on a hub with an OAuth App, else the account gh has logged in here). <code>--with-token</code> takes a token from <code>auth token</code>; <code>--builder name</code> registers a name on hubs with open sign-up (<code>--agent</code>, <code>--username</code> are aliases)</td>
+</tr>
+<tr>
+<td><code>gh auth status</code> / <code>token</code> / <code>logout</code></td>
+<td><code>spacehub auth status</code> / <code>token</code> / <code>logout --yes</code></td>
+</tr>
+<tr>
+<td>(delete your account)</td>
+<td><code>spacehub auth delete --yes</code>: the builder, its projects and agents and its places in orgs (its activity history stays, ending with "left the hub"); its name is free again. An org's last owner adds another owner first</td>
+</tr>
+<tr>
+<td><code>gh repo create name --source . --push</code></td>
+<td><code>spacehub project create [space/]name --source . --push</code></td>
+</tr>
+<tr>
+<td><code>gh repo list [owner]</code></td>
+<td><code>spacehub project list [space]</code></td>
+</tr>
+<tr>
+<td><code>gh repo view [repo]</code></td>
+<td><code>spacehub project view [project]</code></td>
+</tr>
+<tr>
+<td><code>gh repo clone repo [dir]</code></td>
+<td><code>spacehub project clone project [dir] [-- git flags]</code></td>
+</tr>
+<tr>
+<td><code>gh repo edit</code></td>
+<td><code>spacehub project edit [project] --description t --default-branch b</code></td>
+</tr>
+<tr>
+<td><code>gh repo delete repo --yes</code></td>
+<td><code>spacehub project delete project --yes</code></td>
+</tr>
+<tr>
+<td><code>gh repo sync</code></td>
+<td><code>spacehub project sync [--push] [--watch]</code>; <code>--auto</code> for autosync (see Editing together)</td>
+</tr>
+<tr>
+<td>collaborators (<code>gh api</code>)</td>
+<td><code>spacehub project member add|remove [project] builder</code>, <code>member list [project]</code></td>
+</tr>
+<tr>
+<td><code>gh org</code> and its members (web)</td>
+<td><code>spacehub space create|list|view|edit|delete</code>, <code>space member add|remove|list &lt;space&gt; [name] [--owner]</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>spacehub project watch [project] [--exec cmd]</code> streams ref changes live</td>
+</tr>
+<tr>
+<td></td>
+<td><code>spacehub project who [project]</code>, <code>spacehub space who &lt;space&gt;</code> list who is connected now</td>
+</tr>
+<tr>
+<td></td>
+<td><code>spacehub space clone &lt;space&gt; [dir]</code>, <code>spacehub space sync [--watch] [--auto]</code> work on a whole space at once</td>
+</tr>
+<tr>
+<td></td>
+<td><code>spacehub agent create|list|view|connect|disconnect|token|run|delete</code> for agents</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>repo</code> is an alias for <code>project</code>.</p>
+<p><strong>The git remote is always named <code>quirq</code> and always points at a quirq URL</strong>,
+<code>quirq://&lt;hub host&gt;/&lt;space&gt;/&lt;project&gt;</code>, never at <code>origin</code>, so a repo can push
+to GitHub (<code>origin</code>) and the hub side by side without conflict. <code>project create --source</code> adds a <code>quirq</code> remote (and <code>--push</code> pushes without setting
+an upstream, so your branches keep tracking what they tracked), and <code>project clone</code> names the clone's remote <code>quirq</code>. With plain git, use
+<code>git clone -o quirq quirq://hub.quirq.dev/&lt;space&gt;/&lt;project&gt;</code> or
+<code>git remote add quirq quirq://hub.quirq.dev/&lt;space&gt;/&lt;project&gt;</code>. The URL names
+the hub, so the remote keeps working whatever server the CLI is logged in to;
+<code>quirq://&lt;space&gt;/&lt;project&gt;</code> means the hub you are logged in to. Remotes of
+older clones (<code>spacehub://space/project</code>, often named <code>spacehub</code>) keep working
+through <code>git-remote-spacehub</code>. A project is <code>space/name</code>, or just <code>name</code> for
+your personal space. Inside a clone, commands default to the repository's
+quirq remote.</p>
+<p>A login is a token in <code>~/.spacehub/config.json</code>, kept per server. There are
+no passwords: the token is the builder. With GitHub sign-up, <code>spacehub auth login</code> on another machine gets the same token back. Otherwise, run
+<code>spacehub auth token | ssh other spacehub auth login --server &lt;url&gt; --with-token</code>.
+<code>SPACEHUB_SERVER</code>, <code>SPACEHUB_DB</code>, <code>SPACEHUB_TOKEN</code> and <code>SPACEHUB_HOME</code>
+override the saved settings; <code>SPACEHUB_WEB</code> points sign-in at a web service
+on its own port (a local test server).</p>
+<h3>Sub-hubs: full-instance backup and recovery</h3>
+<p><strong>Settings</strong>, directly below <strong>Guide</strong> in the navigation, opens
+<code>/#/settings</code>. Its <strong>Sub-hubs</strong> section is the recovery view
+for an entire Spacehub deployment. It lists immutable backups, verifies
+their contents and restores a chosen backup into a new directory. Access
+requires the hub's global administrator identity or an explicitly delegated
+recovery operator. Owning a space does not grant instance recovery access.</p>
+<h4>Run a connected Sub-hub</h4>
+<p>On the backup machine, sign in to the configured hub as a recovery operator
+and run:</p>
+<pre>spacehub subhub run --storage /srv/spacehub-backups --name office-backup</pre>
+<p>The CLI enrolls a private machine identity, stays connected and automatically
+copies complete source backups into an immutable local vault. A hub keeps no
+backups of its own by default; then the Sub-hub makes them, copying the hub's
+data every <code>--every</code> minutes (see Backups of the hub, kept off
+it). Settings shows
+the connection, heartbeat, automatic backup state and retained generations.
+It does not ask for deployment containers or start services through a form.
+The receiving machine needs the CLI and writable disk; it does not need Docker.
+Restarting the same storage folder reuses its identity. Private enrollment
+state lives beside the vault in <code>&lt;storage&gt;.runtime</code>; keep that directory private.</p>
+<p>It keeps the newest 24 backups it has copied (<code>--keep</code> changes that) and
+deletes older ones as new ones arrive, so the backup machine's disk does not
+fill up.</p>
+<p>The default sync interval is 60 seconds (<code>--interval</code> changes it); heartbeats
+continue independently while a backup downloads. A stopped CLI becomes offline
+in Settings after its heartbeat expires. An unavailable or empty source is
+reported as waiting: connection alone does not mean the hub has been backed up.
+Generations retain their source ID, creation time and manifest hash; transfers
+are published only after every file verifies. Interrupted or corrupt copies
+do not replace an earlier verified backup.</p>
+<pre>spacehub subhub backup --storage /srv/spacehub-backups  # one immediate sync
+spacehub subhub snapshots --storage /srv/spacehub-backups
+spacehub subhub verify &lt;snapshot-id&gt; --storage /srv/spacehub-backups
+spacehub subhub restore &lt;snapshot-id&gt; /srv/recovered-instance --storage /srv/spacehub-backups</pre>
+<p>Restore runs on the machine containing that vault. The UI distinguishes the
+recovery service's vault from other connected machines' retained catalogs.
+Machine credentials authorize full-instance backup reads, never org work or
+agent execution. The hub stores only their hashes and does not show credentials
+in connection status.</p>
+<h4>A sub-hub's page: its storage, live</h4>
+<p>Every connected machine has a page at <code>/subhub/&lt;name&gt;</code> (linked from
+Settings), for recovery operators. While the machine runs <code>spacehub subhub run</code>, the page reads its storage folder through the hub as it is right now:
+the backups it keeps (and its <code>--keep</code>), the disk they use and the disk
+free, each backup's files with sizes and checksums and its <code>hub.json</code>, and
+a button that verifies a backup on that machine. When the machine is
+offline, the page shows its last report.</p>
+<p>A sub-hub usually sits behind NAT, so the hub cannot call it: the machine
+keeps one request open to the hub, which hands it each question and waits
+for the answer. The machine answers only these read-only questions about
+its own storage, never with file contents other than <code>hub.json</code>. The same
+routes work as an API with an operator's token
+(<code>Authorization: Bearer $(spacehub auth token)</code>):</p>
+<pre>GET  /-/api/instance-recovery/subhubs/&lt;name&gt;                          # its storage, or its last report
+GET  /-/api/instance-recovery/subhubs/&lt;name&gt;/snapshots/&lt;id&gt;           # one backup's files
+POST /-/api/instance-recovery/subhubs/&lt;name&gt;/snapshots/&lt;id&gt;/verify    # check every file there</pre>
+<h4>Backups of the hub, kept off it</h4>
+<p>The hub keeps no backups on its own disk; its connected Sub-hubs make them.
+When the hub has no backups of its own to hand out, each Sub-hub copies the
+hub's data folder (<code>/data</code>) through the hub, live, every <code>--every</code> minutes
+(default 60), with no downtime, and keeps the copies in its storage folder.
+The hub only reads its files for them, so it needs no disk for backups.</p>
+<p>SpacetimeDB keeps each database as an append-only commit log beside its
+snapshots, so a copy taken while it writes is like the state after a crash:
+it starts from the last whole transaction. The commit logs are copied last,
+so they reach at least as far as the snapshots copied before them. Each
+backup holds <code>hub.json</code> and <code>data/</code>, the data folder without logs (the
+server's and each database's module logs), caches and Sub-hub state:
+databases, every space and project, accounts, tokens and the server's
+signing keys. The image and its settings are not in it (Settings shows
+these backups as "Hub data, copied live").</p>
+<p>Only the first copy moves everything. After that, a file unchanged since the
+Sub-hub's last copy (same size and mode, last changed before that copy
+began, by the hub's clock) is taken from that copy and shared with it on the
+Sub-hub's disk as a hard link, so an hourly copy downloads only what
+changed: the newest commit log segment, new snapshot files and small files.
+A file SpacetimeDB keeps under several names (snapshot objects) is
+downloaded and stored once.</p>
+<p>To recover, restore the backup to a new folder and start the same server
+image with its <code>data/</code> as <code>/data</code>:</p>
+<pre>spacehub subhub restore &lt;snapshot-id&gt; /srv/recovered --storage /srv/spacehub-backups
+docker run -d -p 3000:3000 -v /srv/recovered/data:/data &lt;the same spacehub image and settings&gt;</pre>
+<p>Builders sign in with their old tokens: the signing keys come back with the
+data.</p>
+<p>Sub-hubs read the data folder through these routes, which also work with an
+operator's token:</p>
+<pre>GET /-/api/instance-recovery/source/live?part=body           # the data folder, without the commit logs' files
+GET /-/api/instance-recovery/source/live?part=logs           # the commit logs' files
+GET /-/api/instance-recovery/source/live/file?path=&lt;path&gt;    # one file, as it is now</pre>
+<h4>A backup container</h4>
+<p>The server image also runs as a hub's backup: start it a second time, with
+its own persistent volume at <code>/data</code>, and these settings:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SPACEHUB_BACKUP_OF</code></td>
+<td>The hub it backs up, such as <code>https://hub.example</code>. Setting it starts the backup container instead of a hub.</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_TOKEN</code></td>
+<td>A recovery operator's token (<code>spacehub auth token</code>), to connect the first time.</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_NAME</code></td>
+<td>Its name in the hub's Settings and at <code>/subhub/&lt;name&gt;</code> (default <code>backup</code>).</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_MINUTES</code></td>
+<td>How often it copies the hub (default 60).</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_BACKUP_KEEP</code></td>
+<td>How many backups it keeps (default 24).</td>
+</tr>
+</tbody>
+</table></div>
+<p>It runs no hub of its own and no SpacetimeDB: it is a Sub-hub
+(<code>spacehub subhub run</code>) that keeps its backups in <code>/data/backups</code> and its
+connection in <code>/data/backups.runtime</code>. Its port answers <code>/healthz</code>, and it
+stops (to be restarted by the platform) if the Sub-hub stops. Its volume
+needs room for the hub's data once plus what changes while it keeps
+backups. To restore, run inside it:</p>
+<pre>spacehub subhub restore &lt;snapshot-id&gt; /data/restored --storage /data/backups</pre>
+<h4>Backups on the hub's own disk (optional)</h4>
+<p>With <code>SPACEHUB_BACKUP_MINUTES</code> set (and no <code>SPACEHUB_RECOVERY_DIR</code> or
+<code>SPACEHUB_RECOVERY_URL</code>), the hub also copies itself into a vault on its own
+disk: the newest <code>SPACEHUB_BACKUP_KEEP</code> (default 3) in <code>SPACEHUB_BACKUP_DIR</code>
+(default <code>/data/.spacehub/backups</code>). Sub-hubs then copy those instead of
+making their own. A file unchanged since the last backup is shared with it
+as a hard link, but the first backup copies everything, so the hub's disk
+needs room for its data again, and every backup leaves 1 GB free for the
+hub; without the room, the hub skips that backup and says how much it
+needs.</p>
+<p>Settings shows how the last backup went (when, its size and how much of it
+was new, or why it failed), when the next one is due, and a <strong>Back up now</strong>
+button for recovery operators. The last result is kept in
+<code>last-backup.json</code> next to the vault, so it survives a restart. As an API,
+with an operator's token:</p>
+<pre>curl -H "Authorization: Bearer $(spacehub auth token)" https://hub.example/-/api/instance-recovery/status     # hubBackup: the schedule and last result
+curl -X POST -H "Authorization: Bearer $(spacehub auth token)" https://hub.example/-/api/instance-recovery/hub-backup  # start one now (409 while one runs)</pre>
+<h4>Deployment operator: provide complete source backups</h4>
+<p>The hub needs a complete source backup before receiving Sub-hubs can copy it.
+This is deployment setup, separate from the receiving CLI and Settings UI.
+SpacetimeDB's private database and server identities cannot be reconstructed
+from project Git repositories. The current source adapter captures the whole
+deployment while stopped, including private configuration and exact runtime.</p>
+<p>Run the CLI on a machine with access to the deployment's Docker daemon.
+Select every stack container, including Spacehub, the TLS proxy and any
+other service with persistent state or private configuration:</p>
+<pre>spacehub subhub help
+spacehub subhub capture --container spacehub --container caddy --storage /srv/instance-vault --allow-stop
+spacehub subhub snapshots --storage /srv/instance-vault
+spacehub subhub verify &lt;snapshot-id&gt; --storage /srv/instance-vault
+spacehub subhub restore &lt;snapshot-id&gt; /srv/recovered-instance --storage /srv/instance-vault</pre>
+<p><code>--allow-stop</code> authorizes a maintenance window. The adapter stops the
+selected running containers, checks that they stopped gracefully, captures
+them while stopped, and attempts to restart every originally running
+container afterward, including on failure. Containers already stopped stay
+stopped; a fully stopped deployment can be captured without <code>--allow-stop</code>.
+Keep other processes that write shared mounts stopped too. This is a cold
+capture, not a consistent backup of files changing underneath it.</p>
+<p>For automatic source creation, save a private JSON file containing
+<code>{"containers":["spacehub","caddy"],"allowStop":true}</code> and run the source
+service outside the selected deployment:</p>
+<pre>spacehub subhub source --storage /srv/instance-vault --capture-config /srv/capture.json --capture-every 3600 --token-file /srv/recovery-token</pre>
+<p>It captures immediately and then at the configured interval, retaining the
+previous generation if capture fails. Stopping selected services is an actual
+maintenance window; choose the interval accordingly. Point the main web
+service's recovery source connection at this independent service as described
+below. Connected receivers then download new verified generations automatically.</p>
+<p>Each backup includes:</p>
+<ul>
+<li>All persistent bind and volume mounts of the selected containers,
+including the hub's <code>/data</code> or configured <code>SPACETIME_ROOT</code>: databases,
+all spaces, identities, permissions, agent tokens, signing keys and
+private server state present there.</li>
+<li>Exact base image archives, deduplicated by image ID, plus a merged
+filesystem export of every selected container. The latter includes its
+writable layer and custom files outside mounted volumes.</li>
+<li>A private <code>deployment.json</code> with full Docker inspect configuration,
+environment values, image IDs, mount mappings and archive mappings.
+OAuth/XO secrets and TLS state are included when present in the selected
+containers or their persistent mounts.</li>
+</ul>
+<p>The prepared layout is <code>deployment.json</code>, <code>images/*.tar</code>,
+<code>containers/*.tar</code> and <code>volumes/*.tar</code>. Persistent mounts are retained as
+opaque <a href="https://docs.docker.com/reference/cli/docker/container/cp/" target="_blank" rel="noopener">Docker copy TAR streams</a>, so binary data, modes, owner/group IDs,
+symlinks and hard links do not depend on the capture host's filesystem.
+Container exports exclude mounted volume contents, which have their own
+archives. Nonpersistent tmpfs contents are excluded and recorded as such.
+External databases, object stores, DNS, host services and containers you
+did not select need their own coordinated backup. There is no space or
+project filter for a full-instance capture.</p>
+<p>Use a dedicated private vault outside every captured mount source, with
+room for both staging and the retained snapshot. The vault defaults to a
+100 GiB application preflight limit and retains older generations; it does
+not prune them automatically. Snapshots contain credentials and must be
+protected as carefully as the running server's data directory. Copy the
+complete vault to independent storage for protection against disk loss.</p>
+<h4>Verification and recovery</h4>
+<p><code>verify</code> checks the immutable manifest and every saved file's SHA-256.
+It leaves the backup unchanged and works without the primary hub. This
+proves the saved bytes match the manifest; test startup separately to
+confirm the recovered deployment works with its host and external services.</p>
+<p><code>restore</code> verifies and copies the complete prepared bundle into a new,
+previously nonexistent directory outside the vault. It never overwrites a
+running deployment, extracts volume archives, loads images or starts
+containers. Use <code>deployment.json</code> to identify each archive and reconstruct
+the deployment manually on the recovery host: load the exact images,
+restore the container filesystem changes and persistent mounts, recreate
+the recorded runtime configuration and networks, then start and validate
+the recovered stack before switching traffic.</p>
+<p>File and directory modes are preserved where the host supports them.
+Mount archives retain the UID/GID, modes and links emitted by Docker;
+apply them with suitable tools when restoring the actual Linux volumes.
+UID/GID mappings, ACLs, extended attributes and security labels may need
+additional host restoration. Docker's archive format and the target
+filesystem determine which metadata can be recovered. The CLI preserves
+archive bytes without interpreting them, so recovery on Windows does not
+silently flatten the Linux mount metadata.</p>
+<h4>Recovery UI independent of the primary hub</h4>
+<p>The same built app can run against a local vault while the primary hub is
+offline, without a database connection or a primary-hub sign-in:</p>
+<pre>spacehub subhub serve --storage /srv/instance-vault --restore-root /srv/instance-restores --token-file /srv/recovery-token</pre>
+<p>Open the printed URL, normally <code>http://127.0.0.1:4092/#/settings</code>.
+<code>--listen 127.0.0.1:4092</code> changes the loopback port; public listeners are
+not supported. <code>--source &lt;hub-name&gt;</code> labels the source. The service needs
+the built app assets (<code>npm run build</code> in <code>app/</code> for a source checkout).
+It serves backup listing, verification and new-directory restore, with
+restores restricted to children of <code>--restore-root</code>. The default restore
+root is <code>spacehub-restores</code> alongside the vault. <code>--token-file</code> creates or
+reuses a private recovery key for a web-service connection; keep it secret.
+The local browser receives a separate recovery session cookie.</p>
+<h4>Recovery in the main web service</h4>
+<p>The web service exposes the same UI through the protected
+<code>/-/api/instance-recovery</code> endpoints. Configure a local vault with
+<code>SPACEHUB_RECOVERY_DIR</code>, an allowed restore parent with
+<code>SPACEHUB_RESTORE_ROOT</code>. <code>SPACEHUB_PUBLIC_URL</code> (or the database name) labels the
+source. Explicitly delegate access to registered builder usernames with
+comma-separated <code>SPACEHUB_RECOVERY_OPERATORS</code>; once any are named, only they
+qualify, and otherwise only the global administrator recorded by the module
+does. The app hides the Sub-hubs section and sub-hub pages from everyone
+else (<code>/-/api/me</code> reports <code>operator</code>), and the endpoints refuse them. The web service uses its
+private <code>SPACEHUB_ADMIN_TOKEN</code> to check that administrator identity.
+<code>SPACEHUB_RECOVERY_STATE_DIR</code> chooses the private connected-machine registry;
+otherwise it is stored under the server's persistent root or CLI home.</p>
+<p>Alternatively, set <code>SPACEHUB_RECOVERY_URL</code> and <code>SPACEHUB_RECOVERY_TOKEN</code> to
+connect the main web service to a separate recovery service. The URL must
+use HTTPS or loopback HTTP and be reachable from the web process; the
+token is the private key from that service's <code>--token-file</code>. A remote HTTPS
+proxy must set the upstream Host to <code>127.0.0.1:4092</code> (or the configured
+loopback port) and omit the browser's Origin header on the bearer-authenticated
+upstream API request.
+The main web service still checks global operator access before forwarding
+the fixed recovery routes. It sends the recovery credential, without
+forwarding browser cookies or builder credentials. Choose either a local
+vault or this remote connection. Keep the standalone recovery UI available
+as well: the main hub's UI and sign-in depend on the primary database.</p>
+<h3>Local development</h3>
+<pre>spacetime start                           # terminal 1
+scripts/setup.sh                          # terminal 2: build, publish "spacehub" to the local server
+export PATH="$PWD/cli/bin:$PATH"          # or scripts/install-cli.sh
+spacehub auth login --server ws://127.0.0.1:3000 --builder &lt;name&gt;
+scripts/e2e.sh                            # 345 checks against a throwaway in-memory server and a stand-in GitHub
+SPACEHUB_E2E_GITHUB=1 scripts/e2e.sh      # also imports a small public GitHub repository
+SPACEHUB_E2E_SERVER=ws://127.0.0.1:3000 scripts/e2e.sh   # against a running server, e.g. the Docker one</pre>
+<p>After changing the module, regenerate the client bindings with
+<code>cd cli &amp;&amp; npm run generate</code>. <code>cd cli &amp;&amp; npm test</code> then asks you to decide
+on the client protocol: if CLIs built before the change break (a table,
+column, reducer or procedure they use is renamed, removed or changes type, or
+a table gains a column), bump <code>PROTOCOL</code> and <code>OLDEST_PROTOCOL</code> in
+<code>module/src/protocol.ts</code>; either way, set <code>BINDINGS_HASH</code> there to the hash
+the test prints. Unit tests need no server: <code>cd module &amp;&amp; npm test</code> runs the reducers in SpacetimeDB's in-process harness, and <code>cd cli &amp;&amp; npm test</code> runs the xo API against a stand-in database, and autosync and the
+GitHub sync's rules against plain git repositories.</p>
+<p>The app lives in <code>app/</code>: <code>cd app &amp;&amp; npm install &amp;&amp; npm run build</code> writes
+<code>app/dist</code>, which the web service serves at <code>/-/app/</code> (in the image,
+<code>SPACEHUB_APP_DIR=/opt/spacehub/app</code>). Without the proxy, open the web
+service's own port (<code>SPACEHUB_WEB_PORT</code>, 3002) to use it; <code>cd app &amp;&amp; npm run typecheck</code> checks it. Its look comes from open-chat, which ported it from
+CopilotKit/OpenMuse (MIT, notice in <code>app/OPENMUSE-LICENSE</code>).</p>
+<h3>Layout</h3>
+<pre><code>module/src/index.ts      tables, reducers and the web UI route; runs inside SpacetimeDB
+module/src/ui.ts         the web UI's code pages (tree, blob, commits, diffs, refs, ...)
+module/src/workspace.ts  the app's data: the hub, a space or a project as open-chat snapshots (/api)
+module/src/chat.ts       chat turns from the app, committed to a conversation's .log.jsonl
+module/src/space.ts      SPACE.md (goal, outcomes, owners, rules, routines) and starting from templates
+module/src/spacetemplate.ts the built-in goal space template
+module/src/code.ts       the app's code views: branches, trees and files at a ref, history, diffs
+module/src/markdown.ts   safe Markdown for READMEs and .md files
+module/src/diff.ts       line diffs for commit pages
+module/src/style.ts      the app's look and page frame for server-rendered pages, shared with the web service
+module/src/guide.ts      the guide's wording, for /-/guide and the home page
+module/src/store.ts      reads objects back out of the tables; who owns or belongs to a space
+module/src/sha1.ts       lets the database verify every object id
+module/src/protocol.ts   the client protocol CLIs must speak; when to bump it
+cli/src/cli.ts           spacehub (auth, space, project)
+cli/src/remote.ts        git-remote-quirq (and git-remote-spacehub, for older clones)
+cli/src/url.ts           quirq:// URLs
+cli/src/compat.ts        does this CLI match the hub: the protocol check and its messages
+cli/src/xo.ts            xo.quirq.dev's API: xo's per-user records and builders
+cli/src/git.ts           git plumbing: rev-list, cat-file, packfile writer
+cli/src/web.ts           web service: sign in/up, create and import projects
+cli/src/workers.ts       runners and workers launched from chats (/-/api/runners, /-/api/workers)
+cli/src/agentshub.ts     Connect Agents Hub: find it on Launchpad with an XO pass, then Connect
+cli/src/workerclient.ts  a Worker Protocol (worker/1) client for one runner
+cli/src/runnerstore.ts   runners and workers in the module's private tables, through the admin
+cli/src/seal.ts          sealing runner tokens with SPACEHUB_SECRET_KEY
+cli/src/app.ts           the app's page, files and API (/-/api/view, /-/api/chat)
+cli/src/avatar.ts        avatars: GitHub pictures fetched by the hub, initials otherwise
+cli/src/live.ts          live pages: the /-/live event stream (livepage.ts: the page script)
+cli/src/github.ts        GitHub's API, mirroring a repository, syncing linked spaces as the admin
+cli/src/refplan.ts       the sync's rules: what moves, what is kept, what diverged
+cli/src/autosync.ts      autosync: commit, rebase, push; stop on a conflict; the step loop
+cli/src/spacesync.ts     a whole space in one folder: space clone and space sync
+cli/src/agentrun.ts      spacehub agent run: an agent's home and connected spaces, autosynced
+cli/src/agenttemplate.ts the starter definition of an agent's home project
+cli/src/module_bindings  generated, do not edit
+app/                     the app: open-chat's interface over the hub (React, built with esbuild)
+Dockerfile               targets: server (default), client
+docker-compose.yml       server + Caddy TLS front
+docker/                  server entrypoint, built-in allowlist (server.Caddyfile), compose Caddyfile
+scripts/                 setup.sh, install-cli.sh (+ install-cli.ps1 for Windows), e2e.sh
+</code></pre>
+<h3>How it works</h3>
+<p><strong>Data model</strong></p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Key</th>
+<th>Holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user</code></td>
+<td>identity</td>
+<td>a builder's name</td>
+</tr>
+<tr>
+<td><code>space</code></td>
+<td>name</td>
+<td>a top-level space: <code>personal</code> (a builder's), <code>org</code> or <code>agent</code> (with its parent space); display name, description, creator</td>
+</tr>
+<tr>
+<td><code>space_role</code></td>
+<td>space + member</td>
+<td>a space's owners and members</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td><code>space/project</code></td>
+<td>a project: its space (<code>owner</code>), description, default branch, object counters, timestamps</td>
+</tr>
+<tr>
+<td><code>project_import</code></td>
+<td>project</td>
+<td>GitHub source, import status</td>
+</tr>
+<tr>
+<td><code>project_builder</code></td>
+<td>project</td>
+<td>the credited GitHub builder: login, display name, profile</td>
+</tr>
+<tr>
+<td><code>activity</code></td>
+<td>id (time, project indexed)</td>
+<td>one row per change: who, what, which space or project and ref, commit, count, text</td>
+</tr>
+<tr>
+<td><code>git_ref</code></td>
+<td>project + ref name</td>
+<td><code>refs/heads/*</code> and <code>refs/tags/*</code>, mapped to object ids</td>
+</tr>
+<tr>
+<td><code>git_object</code></td>
+<td>project + oid</td>
+<td>kind, size, raw body (inline up to 1 MiB) and <code>pos</code>, its place in the project's object log</td>
+</tr>
+<tr>
+<td><code>object_chunk</code></td>
+<td>project + oid + index</td>
+<td>1 MiB pieces of larger objects</td>
+</tr>
+<tr>
+<td><code>project_member</code></td>
+<td>project + builder</td>
+<td>a project's collaborators</td>
+</tr>
+<tr>
+<td><code>agent</code></td>
+<td>name</td>
+<td>an agent's identity and creator (its space is in <code>space</code>, kind <code>agent</code>)</td>
+</tr>
+<tr>
+<td><code>agent_secret</code></td>
+<td>name</td>
+<td>(private) an agent's token, read only through <code>agent_token</code> by its owners</td>
+</tr>
+<tr>
+<td><code>github_account</code></td>
+<td>GitHub account id</td>
+<td>(private) a builder who signed up with GitHub: its login then, its name, identity and token; written by <code>github_link_builder</code> (admin only), read by the web service to sign the account in again</td>
+</tr>
+<tr>
+<td><code>hub_state</code></td>
+<td>key</td>
+<td>(private) the hub's settings: its admin, and where builders come from (<code>accounts</code>: <code>open</code>, <code>github</code> or <code>xo</code>)</td>
+</tr>
+<tr>
+<td><code>space_link</code></td>
+<td>space</td>
+<td>the GitHub account it mirrors, the last sync's status and time</td>
+</tr>
+<tr>
+<td><code>ref_sync</code></td>
+<td>project + ref</td>
+<td>GitHub's value at the last sync, and whether the hub's copy follows it or diverged</td>
+</tr>
+<tr>
+<td><code>project_size</code></td>
+<td>project</td>
+<td>the bytes of its git objects, uncompressed, as git counts them; kept as objects arrive</td>
+</tr>
+<tr>
+<td><code>presence</code></td>
+<td>connection</td>
+<td>which project (or whole space) a connected client follows, its mode and branch (or an agent's host), and its last heartbeat</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Push.</strong> The helper lists the objects the project lacks
+(<code>git rev-list --objects &lt;new&gt; --not &lt;remote refs&gt;</code>). It uploads them in
+batches of about 4 MiB, and chunks objects over 1 MiB. The database re-hashes
+every object and rejects any whose id doesn't match. Then each ref moves
+through <code>update_ref</code>, which checks four things:</p>
+<ul>
+<li>The caller owns or belongs to the project's space, or collaborates on the
+project.</li>
+<li>The ref still holds the value the pusher listed (compare-and-swap).</li>
+<li>Unless the push is forced, a branch move is a fast-forward. The database
+walks commit parents itself to check this.</li>
+<li>An existing tag doesn't move unless the push is forced.</li>
+</ul>
+<p><code>--force-with-lease</code> is honoured.</p>
+<p><strong>Fetch.</strong> The helper subscribes to the project's objects in windows of about
+8 MiB, ordered by <code>pos</code>, and writes the missing ones into the repo as a
+packfile. <code>.git/spacehub/</code> records how far it has read, so later fetches only
+download newer objects. If that record is out of date, the helper re-reads
+the whole project.</p>
+<p><strong>Sync.</strong> Refs are rows, so <code>project watch</code> and <code>project sync --watch</code> hear about
+a push as soon as it commits. No polling is involved.</p>
+<p><strong>Presence.</strong> A long-running command calls <code>watch_project</code> with its project,
+mode and branch (or <code>watch_space</code> with a whole space), and repeats it every
+minute as a heartbeat. The row is keyed
+by the connection, so SpacetimeDB's <code>client_disconnected</code> removes it when the
+command stops. If a connection vanishes without closing, its row is swept by
+the next <code>client_connected</code> once its heartbeat is three minutes old, and
+pages and <code>project who</code> hide it as soon as it is stale.</p>
+<p><strong>Names.</strong> A space is a top-level name and a project is a repository, in
+the tables, columns, reducers and activity alike. Reducers that act on one
+project are named for it and take its full name as <code>project</code>
+(<code>create_project</code> takes the space and the name): <code>delete_project</code>,
+<code>edit_project</code>, <code>set_project_builder</code>, <code>add_project_member</code>,
+<code>remove_project_member</code>, <code>watch_project</code>, <code>put_objects</code>, <code>update_ref</code>,
+<code>start_import</code>, and so on. Reducers for a space take <code>space</code>: <code>edit_space</code>,
+<code>watch_space</code>, <code>add_space_member</code>, <code>create_org</code>, <code>link_space</code>. A CLI from
+before 0.4 cannot talk to this hub (its reducers are gone); update it.</p>
+<p><strong>Client protocol.</strong> On every connect the client calls the
+<code>client_protocol</code> procedure, which answers with the protocol the hub speaks
+and the oldest client protocol it still serves (<code>module/src/protocol.ts</code>).
+A client outside that range stops before it subscribes to anything, with a
+message that says which side to update. The procedure's name and shape never
+change, so every client version can ask.</p>
+<h3>xo</h3>
+<p>xo.quirq.dev checks who an xo user is with Clerk and keeps everything else
+here: each user's projects, spaces with their refs, and invites, as one JSON
+record per Clerk user in the private <code>xo_record</code> table. It also asks the hub
+for the user's builder, whose token the user's xo then pushes with. A
+builder is a GitHub account, so an xo user's builder is the builder of the
+GitHub account they connected to XO (Clerk keeps it; xo.quirq.dev sends its
+id and login): the same builder <code>spacehub auth login</code> and Sign in with GitHub
+reach, made on the first sign-in either way. The private <code>xo_link</code> table
+holds which GitHub account each xo user connected. Their xo username becomes
+the builder's display name and, when it is a free name here and no one
+else's GitHub login, a <strong>second name</strong>: <code>space_alias</code>, a public table, so
+<code>/&lt;xo username&gt;/...</code> shows the same pages as <code>/&lt;GitHub login&gt;/...</code> (the app
+moves the address to the GitHub login), and the CLI, git remotes and every
+reducer take either name; nobody else can take it. Without a connected
+GitHub account, xo.quirq.dev says where to connect one, and the website sends
+the visitor there. A builder xo made before GitHub was needed (named after
+the xo username, in the private <code>xo_agent</code> table) becomes the GitHub
+account's on its next sign-in: renamed to the GitHub login with its token,
+projects and places kept, or merged into the builder GitHub sign-in made
+(its projects move, a clashing name gets <code>-&lt;old name&gt;</code> after it), and its old
+name stays as a second name. These tables are written only through admin
+reducers (<code>xo_put_record</code>, compare-and-swap on the record's version,
+<code>xo_link_github</code>, and <code>xo_link_agent</code> for xo servers from before).</p>
+<ul>
+<li><strong>The admin</strong> is the identity that owns the database. The entrypoint calls
+<code>claim_admin</code> right after every publish; the first claim sticks, and if
+another identity ever holds it the server refuses to start.</li>
+<li><strong>GitHub sync</strong> runs as the admin too: the entrypoint always hands the
+admin's token to the web service, whose sync may create projects and push
+only in spaces linked to GitHub (shown as "GitHub sync" in the activity).
+git sees that token only when it pushes into the hub.</li>
+<li><strong>GitHub sign-up</strong> is the admin as well: the web service checks the GitHub
+token with GitHub, then makes the builder with <code>github_link_builder</code> (see
+<code>cli/src/signin.ts</code>). It is off only with <code>SPACEHUB_ACCOUNTS=xo</code>.</li>
+<li><strong>Turn it on</strong> by setting <code>SPACEHUB_XO_KEY</code> (32 characters or more, the same
+value as xo.quirq.dev's <code>XO_HUB_KEY</code>). The web service then answers
+<code>/-/api/xo/v1/</code> (see <code>cli/src/xo.ts</code>) with that key only, acting as the
+admin over SpacetimeDB's HTTP API inside the container. People still sign
+up with GitHub (or as <code>SPACEHUB_ACCOUNTS</code> says); <code>SPACEHUB_ACCOUNTS=xo</code>
+leaves xo as the only source of builders. Names are shared: a second name
+is taken like any other.</li>
+<li><strong>Launching agents needs xo.</strong> On a hub with xo, members of an org with
+agents launch and steer them only once their account is linked to XO
+(signed in with xo); signed in with GitHub alone they chat and follow the
+workers, and the chat says to sign in with xo to launch.</li>
+<li><strong>Sign in with xo</strong> on the website (<code>cli/src/xosignin.ts</code>): the button
+takes the visitor through the same Clerk sign-in as <code>xo login</code>, and back
+signed in as their builder, made on the first sign-in. The hub is a
+client of xo login's Clerk OAuth application (public, with PKCE):
+<code>GET /-/login/xo</code> keeps a random state and a verifier for 10 minutes, ties
+them to the browser with an HttpOnly cookie, and sends it to Clerk;
+<code>GET /-/login/xo/callback</code> checks the state against that cookie (once
+only), then asks the xo server, with <code>SPACEHUB_XO_KEY</code>, to swap the code
+(<code>POST &lt;xo&gt;/login/hub</code> with the code, verifier and callback). The xo server
+answers the Clerk user and their builder, making it as <code>xo login</code> would;
+the hub reads the builder's token (from <code>xo_link</code> and <code>github_account</code>, or
+<code>xo_agent</code> for one made before) and puts it only in the usual session
+cookie. With no GitHub connected to XO, the xo server's 409 names where to
+connect one, and the page links there and back to Sign in with xo. No token or verifier is in a URL, the code works once
+and only with the verifier kept here, and nothing in the browser talks to
+the xo server. The button shows only while the xo server's <code>GET /login</code>
+offers this hub's own callback (as the browser reached it), which it does
+once the callback is a redirect URL of that OAuth application and
+<code>XO_HUB_LOGIN_REDIRECT</code> is set there; the answer is kept for 5 minutes.
+Without it, the terminal steps are all there is, as before.</li>
+<li><strong>Names.</strong> xo's record was designed when a hub space was one repository,
+so its "spaces" are hub projects today, and an xo project (a group of
+repositories) is closest to a hub space. The hub stores the record as
+opaque JSON, so nothing breaks; xo's own code should rename to match.</li>
+</ul>
+<h3>Workers on your own runners</h3>
+<p>Workers start from a project's chats and run on the launcher's own runner,
+on the launcher's own account. A runner is anything that speaks the Worker
+Protocol (<code>worker/1</code>, below); an Agents Hub is the first.</p>
+<ul>
+<li><strong>Connect a runner</strong> in Settings → Runners: enter its address and press
+<strong>Connect</strong>. space-hub sends you to the runner, you approve there, and it
+sends you back connected: the runner gives space-hub's server a token that
+only sees the workers space-hub starts (an OAuth-style code exchange with
+PKCE; the token is never in a URL or the browser). A runner without that
+button takes a pasted token instead: on an Agents Hub, Settings → Agent
+access, with "Only tasks it starts". Either way the token is sealed with
+<code>SPACEHUB_SECRET_KEY</code> and never goes back to a browser. Several runners are
+fine; one is the default. <strong>Disconnect</strong> revokes a token space-hub got
+through Connect; a pasted token is yours, so it is left alone.</li>
+<li><strong>Connect Agents Hub</strong> (with <code>SPACEHUB_LAUNCHPAD_API</code>): one button, one XO
+sign-in. space-hub sends you through XO's sign-in ("Allow access") and swaps
+the code itself for a short-lived pass, the way <code>xo login</code> does. With it,
+Launchpad lists your apps: your Agents Hub is found (even while it is still
+starting) and the usual Connect follows. Without one, Settings shows a dialog
+linking Launchpad's own create page (<code>SPACEHUB_LAUNCHPAD_CREATE_PAGE</code>), which
+fills the hub's XO API key, and watches for the new hub in the background:
+once it shows up, Connect follows by itself, with no second sign-in.
+The pass stays only in the server's memory: dropped as soon as your hub is
+found, when you close the dialog, or after 10 minutes at most; never stored,
+logged, sent to the browser, or put in a cookie or URL. Clerk's refresh token
+is never read.</li>
+<li><strong>Launch.</strong> In a channel, write what the worker should do and press the rocket
+beside Send. The tray picks the runner (when you have more than one) and, if
+the runner works on repositories, asks for <code>owner/repo</code> or an issue or pull
+request link. Only people who can write to the project launch there. A launch
+carries an idempotency key, so a retry never starts a worker twice.</li>
+<li><strong>Everyone in the space follows it.</strong> Under the message, members see the
+worker "on 's Agents Hub": what it is doing, its steps (when the
+runner shares them) and its result. Only the launcher stops it, follows up or
+tears it down, and only when the runner can.</li>
+<li><strong>The result is kept.</strong> When a worker ends, space-hub keeps a copy of its
+summary and links, so the card still shows them after it is torn down
+("Torn down · result kept") or while its runner is disconnected. Connect the
+same runner again and its workers come back to it. Settings → Your workers
+lists everything you launched, with a nudge to tear down idle ones.</li>
+<li><strong>In the files.</strong> A launch is an ordinary chat turn by the launcher, ending
+with <code>&lt;!-- agenthub:task=&lt;id&gt; --&gt;</code>; the task's text says who launched it from
+which conversation.</li>
+</ul>
+<p>The Worker Protocol a runner speaks, with <code>Authorization: Bearer &lt;token&gt;</code>:
+<code>GET /api/worker</code> (<code>{protocol: "worker/1", name, kind, capabilities: {followUp, stop, events, repo, connect}}</code>; without a token only <code>protocol</code> and
+<code>capabilities</code>), and tasks at <code>POST /api/tasks</code>, <code>GET /api/tasks/&lt;id&gt;</code>,
+<code>/events?after=</code>, <code>POST /messages</code>, <code>POST /stop</code> and <code>DELETE</code>. A runner with
+<code>connect</code> also serves <code>/connect</code> (the consent page, with <code>client</code>,
+<code>redirect_uri</code>, <code>state</code> and an S256 <code>code_challenge</code>), <code>POST /api/connect/token {code, codeVerifier, redirectUri}</code> and <code>DELETE /api/tokens/self</code>.
+The browser only talks to <code>/-/api/runners</code> and <code>/-/api/workers</code> (see
+<code>cli/src/workers.ts</code>); only the protocol's fields of a runner's answers reach
+it, and its token is taken out of a worker's steps.</p>
+<h3>Limits (v0)</h3>
+<ul>
+<li>Mirroring is GitHub to hub, public repositories only.</li>
+<li>Every project can be read by anyone who can reach the server. Only its
+space's owners and members and its collaborators can push; they can do
+anything a push does, including force pushes and deleting branches. To be
+one builder on several machines, sign in with the same GitHub account, or
+use <code>auth token</code> and <code>auth login --with-token</code>.</li>
+<li>Autosync commits often and with generated messages; squash before sharing
+the history elsewhere if that matters. It skips commit hooks.</li>
+<li>Anyone with a GitHub account can sign up (with <code>SPACEHUB_ACCOUNTS=open</code>,
+anyone who can reach the server registers any free name; with
+<code>SPACEHUB_ACCOUNTS=xo</code>, only xo makes builders). Builders can create orgs
+and import public GitHub repositories (up to
+<code>SPACEHUB_IMPORT_MAX_MB</code> each). Keep that in mind before exposing a server
+publicly.</li>
+<li>Org names are not checked against GitHub: an org can take a
+name that a GitHub user would later want, and that user then cannot sign
+up until the admin frees it.</li>
+<li>GitHub sign-up sends the token <code>gh</code> holds (often with wide scopes) to the
+hub once. The hub uses it for one <code>GET /user</code> and drops it, but you are
+trusting the hub with it for that moment.</li>
+<li>Objects are stored whole and uncompressed, in SpacetimeDB's memory. That
+suits code, not big binaries. The object size cap is 100 MiB.</li>
+<li>Transfers carry whole objects, not deltas. There are no shallow clones.
+Only SHA-1 repositories are supported.</li>
+<li>An interrupted push can leave unreferenced objects behind. They are
+harmless, and the retry skips them.</li>
+</ul>
+<h3>License</h3>
+<p>MIT. See <a href="https://github.com/quirq-ai/space-hub/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>. The web app's look is ported from
+CopilotKit/OpenMuse, also MIT (notice in <code>app/OPENMUSE-LICENSE</code>).</p>

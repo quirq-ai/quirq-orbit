@@ -1,0 +1,29 @@
+<p>Skills that let an agent do a whole job from one prompt. Each skill is a folder under
+<code>skills/</code> with a <code>SKILL.md</code> (what it does, when to use it, the steps) and whatever it needs
+beside it: templates, scripts, references.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/quirq-ai/agent-skills/blob/main/skills/explainer-film/SKILL.md" target="_blank" rel="noopener">explainer-film</a></td>
+<td>A narrated 1 to 3 minute explainer film for a product, repo or feature, in the engraved-plate style of the Innernet field guide and quirq infra films</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Use a skill</h3>
+<p>Claude Code loads skills from <code>~/.claude/skills/</code> (every project) or <code>.claude/skills/</code> (one
+project). Copy or link the skill's folder there:</p>
+<pre>git clone https://github.com/quirq-ai/agent-skills
+ln -s "$PWD/agent-skills/skills/explainer-film" ~/.claude/skills/explainer-film</pre>
+<p>Then ask for the job in plain words, for example "make an explainer film for this repo".</p>
+<h3>Add a skill</h3>
+<p>One folder per skill, named like its <code>name:</code> in <code>SKILL.md</code>. Keep <code>SKILL.md</code> short and move
+depth into <code>references/</code>. Never commit secrets: a skill that needs an API key reads it from
+the user's environment or a gitignored <code>.env</code>.</p>
+<h3>License</h3>
+<p>Apache-2.0 (<code>LICENSE</code>). Third-party material a skill uses is listed in its own <code>ASSETS.md</code>.</p>

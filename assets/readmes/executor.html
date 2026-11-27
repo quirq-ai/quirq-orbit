@@ -1,0 +1,123 @@
+<p>The sandbox an AI coding agent works in. One executor runs for one chat: it is a container that connects out to
+an OpenAI Agents API session (a <code>self_hosted</code> environment) and runs the shell commands the agent asks for, in a
+workspace folder, as an unprivileged user.</p>
+<p>It is small on purpose: one supervisor process (<code>executor.mjs</code>, about 100 lines, no dependencies) around one
+<code>codex exec-server</code>.</p>
+<h3>How it fits</h3>
+<pre><code>Agents Hub ──creates──▶ Launchpad app (this image) ──dials out──▶ OpenAI Agents API session
+   (one per chat)          codex exec-server                         (the agent's turns)
+</code></pre>
+<ol>
+<li>A user starts a chat in their Agents Hub. The hub opens an OpenAI Agents session and gets an environment id
+and an environment address for it.</li>
+<li>The hub asks Launchpad (a platform that runs apps on Kubernetes) to create an app from the
+<code>agents-executor</code> template, passing those values.</li>
+<li>Launchpad starts this image with the values as env. The supervisor starts <code>codex exec-server</code>, which connects
+to the session. From then on the agent's shell commands run here.</li>
+<li>When the chat is torn down, the hub deletes the app.</li>
+</ol>
+<h3>Files</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>executor.mjs</code></td>
+<td>The supervisor: starts <code>codex exec-server</code>, restarts it if it dies, answers the health probe, stops it cleanly on <code>SIGTERM</code></td>
+</tr>
+<tr>
+<td><code>config.mjs</code></td>
+<td>Reads and checks the env values before they are used</td>
+</tr>
+<tr>
+<td><code>test/config.test.mjs</code></td>
+<td>Tests for <code>config.mjs</code></td>
+</tr>
+<tr>
+<td><code>Dockerfile</code></td>
+<td>The image: Node 22, git, ripgrep, jq, Python 3, make, g++, and a pinned <code>@openai/codex</code></td>
+</tr>
+<tr>
+<td><code>launchpad-template/agents-executor/template.yaml</code></td>
+<td>The Launchpad template: the parameters the hub passes and the env they become</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Contract</h3>
+<p>Launchpad sets these env values on each executor app (from the template):</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>What</th>
+<th>Checked by <code>config.mjs</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ENVIRONMENT_ID</code></td>
+<td>The OpenAI session's environment id</td>
+<td>Letters, digits, <code>_</code>, <code>-</code>; 1 to 128 characters</td>
+</tr>
+<tr>
+<td><code>REMOTE_URL</code></td>
+<td>The OpenAI session's environment address</td>
+<td>Must be <code>https://</code> or <code>wss://</code></td>
+</tr>
+<tr>
+<td><code>CODEX_API_KEY</code></td>
+<td>The user's OpenAI environment key (a secret parameter)</td>
+<td>Must be present</td>
+</tr>
+<tr>
+<td><code>WORKSPACE_DIR</code></td>
+<td>Where the agent works. Default <code>/workspace/work</code></td>
+<td>One folder directly under <code>/workspace/</code></td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td>The health port. Default <code>8080</code></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p>If a value is missing or malformed, the executor prints which one and exits with code 1.</p>
+<p>Health: <code>GET /healthz</code> on the port answers <code>200</code> with
+<code>{"state": "starting|running|restarting|stopping", "restarts": n}</code>.</p>
+<p>For local runs only: <code>CODEX_BIN</code> (default <code>codex</code>), <code>RUN_AS_UID</code> and <code>RUN_AS_GID</code> (default <code>1000</code>).</p>
+<h3>Behaviour</h3>
+<ul>
+<li><strong>Outbound only.</strong> The executor dials out to OpenAI. Nothing calls into it except the health probe.</li>
+<li><strong>The agent is not root.</strong> The supervisor starts as root only so it can give the workspace to uid 1000 (the
+image's <code>node</code> user) and start <code>codex exec-server</code> as that user. Every command the agent runs is that user's.</li>
+<li><strong>A minimal environment.</strong> <code>codex exec-server</code> gets <code>PATH</code>, <code>HOME</code>, <code>LANG</code>, <code>CODEX_HOME</code> and <code>CODEX_API_KEY</code>,
+and nothing else from the container's env. It needs the key to connect; that key can only connect environments.</li>
+<li><strong>Restarts with backoff.</strong> If <code>codex exec-server</code> exits, it is started again after 3 s, then 6 s, 12 s, 24 s,
+then every 30 s. The count shows in <code>/healthz</code>.</li>
+<li><strong>Clean stop.</strong> On <code>SIGTERM</code> or <code>SIGINT</code> it sends <code>SIGTERM</code> to <code>codex exec-server</code>, then <code>SIGKILL</code> after 5 s.</li>
+<li><strong>No keys in the image.</strong> Every key arrives through env when the app starts.</li>
+<li><strong>The agent can only use what is installed.</strong> Add the toolchains your repositories need to the <code>Dockerfile</code>.</li>
+</ul>
+<h3>Build, test, run</h3>
+<pre>npm test        # Node 22 or later; no keys needed</pre>
+<pre>docker buildx build --platform linux/amd64 --provenance=false -t &lt;registry&gt;/&lt;project&gt;/agents-executor:&lt;version&gt; --push .</pre>
+<p>To run it by hand you need a real OpenAI Agents session (its environment id and address) and an environment key:</p>
+<pre>docker run --rm -p 8080:8080 \
+  -e ENVIRONMENT_ID=&lt;id&gt; -e REMOTE_URL=&lt;address&gt; -e CODEX_API_KEY=&lt;environment key&gt; \
+  &lt;registry&gt;/&lt;project&gt;/agents-executor:&lt;version&gt;
+curl http://localhost:8080/healthz</pre>
+<p>The <code>codex</code> version is pinned in the <code>Dockerfile</code> (<code>CODEX_VERSION</code>) because <code>exec-server</code> ships in the CLI's
+alpha channel: a rebuild should never change behaviour by itself.</p>
+<h3>The template</h3>
+<p><code>launchpad-template/agents-executor/template.yaml</code> is in Launchpad's own template format, so it is only usable
+on a Launchpad installation. It is here because it is the other half of the contract: it shows the three
+parameters the hub passes (<code>environmentId</code>, <code>remoteUrl</code>, <code>environmentKey</code>), the env they become, the size, the
+10 GB <code>/workspace</code> volume, and <code>fsGroup: 1000</code> (so uid 1000 can write to the volume). Replace <code>&lt;project&gt;</code> in
+<code>image:</code> with the registry project the image is pushed to.</p>
+<h3>Source</h3>
+<p>This repository is a copy. The executor is developed in the Agents Hub repository and copied here; changes are
+made there first.</p>

@@ -1,0 +1,374 @@
+<p>Configuration as code for <strong>quirq infra</strong> (qq), the CI/CD system for every quirq-ai repo. This
+repo declares the whole system as data: which repos are onboarded, what builds them, how a change
+lands, how releases move through channels, and the limits on what agents may do alone. A change
+here is a pull request that goes through the same gate as code, and you revert it like code.</p>
+<p>Chromium counterpart: <code>chromium/src/infra/config</code> plus <code>lucicfg</code>. Chromium writes its fleet in
+Starlark, generates the service configs, and a presubmit check fails if the generated files are
+stale. This repo keeps that model (source, then generated output, then an in-sync check) with
+smaller parts.</p>
+<p><strong>Status: v0 skeleton, built width-first.</strong> Every area is declared in enough detail for an expert
+to take it over. Each file's header says whether it is a <code>seed</code> (its values are decided) or a
+<code>stub</code> (only the shape is there, and the values are placeholders), and its <code>[area] read_by</code> names
+the readers it is meant for.</p>
+<p>Who reads it today (checked in each repo's main on 2026-10-07):</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Reader</th>
+<th>Reads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qqcfg</code> here (validate, generate, deliver)</td>
+<td>every area; <code>pipelines</code>, <code>kinds</code>, <code>repos</code> and <code>org</code> pools shape the generated workflows</td>
+</tr>
+<tr>
+<td>quirq-ai/gate</td>
+<td><code>gate</code>, <code>kinds</code>, <code>org</code>, <code>pipelines</code>, <code>repos</code></td>
+</tr>
+<tr>
+<td>quirq-ai/rollers</td>
+<td><code>rollers</code>, <code>kinds</code>, <code>org</code>, <code>repos</code></td>
+</tr>
+<tr>
+<td>quirq-ai/recipes (<code>qqrecipes check-kinds</code>)</td>
+<td><code>kinds</code></td>
+</tr>
+<tr>
+<td>quirq-ai/sync</td>
+<td><code>kinds</code></td>
+</tr>
+<tr>
+<td>quirq-ai/test-pipelines (<code>qqresults</code>, when given <code>--infra-config</code>)</td>
+<td><code>flakes</code></td>
+</tr>
+<tr>
+<td>quirq-ai/gardener (<code>qqgarden</code>, V0-GAR-03, V0-GAR-04)</td>
+<td><code>auto_revert</code>, <code>postmortem</code>, <code>pipelines</code>, <code>repos</code>, <code>org</code></td>
+</tr>
+<tr>
+<td>quirq-ai/release (<code>qqrelease</code>, V0-REL-01..03)</td>
+<td><code>channels</code>, <code>health</code> (canary probes), <code>pipelines</code>, <code>repos</code></td>
+</tr>
+<tr>
+<td>quirq-ai/monitoring (raw files, not <code>qqcfg</code>)</td>
+<td><code>channels</code>, <code>repos</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>No reader yet: <code>fuzz</code> and <code>perf</code>. release's fuzz smoke keeps its bounds in code until V1-REL-02
+(a <code>TODO(expert)</code> in its <code>canary.py</code>), and perf reads its benchmark parameters from its own
+<code>tools/bench_commit.sh</code>, so V0-CFG-03's "their readers use them" is not met for those two.</p>
+<p>The plan behind this repo is in <a href="https://github.com/quirq-ai/infra-config/blob/main/docs/plan.md" target="_blank" rel="noopener">docs/plan.md</a>, and the 51 v0 work items for all
+thirteen quirq infra repos are in <a href="https://github.com/quirq-ai/infra-config/blob/main/docs/v0.md" target="_blank" rel="noopener">docs/v0.md</a>. Both are reference copies of suraj's
+originals, and changing them needs his approval.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>PRs</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-CFG-01 schema, validator, CI</td>
+<td>skeleton (7228ab2)</td>
+<td>merged; <code>validate</code> is the required check in this repo's merge queue (gate's repo rulesets, applied at gate 6610664)</td>
+</tr>
+<tr>
+<td>V0-ORG-01 the 13 repos</td>
+<td>#1</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-CFG-03 fill the stubs</td>
+<td>#2</td>
+<td>merged; readers listed above; <code>fuzz</code> and <code>perf</code> have none yet</td>
+</tr>
+<tr>
+<td>V0-CFG-02 builders and drift check</td>
+<td>#3, #7 (S5 test reports), #8, #24 to #27 (drift fixes); xo-space #211, innernet #37, website #1</td>
+<td>merged and delivered to all three product repos. The <code>qq-drift</code> org ruleset is off: quirq-ai is on GitHub Free, which has no org rulesets (gate <code>docs/apply-settings.md</code>), so nothing requires <code>qq-drift.yml</code> yet</td>
+</tr>
+<tr>
+<td>website onboarding</td>
+<td>#31, #32</td>
+<td>merged; gate's settings for website (gate #28) are merged but not applied yet</td>
+</tr>
+<tr>
+<td>V0-CFG-04 suraj's v0 decisions</td>
+<td>#4</td>
+<td>suraj decided the 3 <code>TODO(suraj, v0)</code> values on 2026-10-06 (canary hour, revert-cap counting, compute ceiling); they are not written into config yet</td>
+</tr>
+<tr>
+<td>V0-ORG-02 owners and rotations</td>
+<td>#4, #30</td>
+<td>suraj owns <code>org</code> and the thirteen infra repos (#30); <code>validate</code> lists the 12 areas, 3 product repos and 3 rotations still empty</td>
+</tr>
+<tr>
+<td>V0-ORG-04 budget readable</td>
+<td>#4</td>
+<td><code>qqcfg get org budget</code>; suraj decided the ceiling on 2026-10-06, but it is not written into config yet</td>
+</tr>
+<tr>
+<td>V0-TST-01 result sink in test builders (asked by test-pipelines)</td>
+<td>#5</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-PRF-01 <code>bench</code> in python-service and node-app (asked by perf)</td>
+<td>#6</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-CFG-05 one source for policy</td>
+<td>partial</td>
+<td>gardener's caps and <code>auto_land_repos</code> come from <code>auto_revert</code> (gardener <code>tests/test_policy.py</code>); release reads <code>channels</code>, <code>health</code>, <code>pipelines</code> and <code>repos</code>; release's fuzz smoke bounds are still in its code</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Quick start</h3>
+<pre>python3 -m pip install -r requirements.txt     # hashed lock of requirements.in (jsonschema, PyYAML); Python 3.11+
+python3 tools/qqcfg.py validate                # the CI check; exit 1 on any error
+python3 tools/qqcfg.py validate --todos        # also list every open decision
+python3 tools/qqcfg.py generate                # rewrite generated/ after editing config/
+python3 tools/qqcfg.py get org budget           # one area or value as JSON, for non-Python readers
+python3 tools/qqcfg.py deliver xo-space ../xo-space   # copy its generated workflows into a checkout
+python3 tools/qqcfg.py check-delivered xo-space ../xo-space   # the qq-drift check
+python3 tools/qqcfg.py add-repo demo --kind node-app --description "One line."   # onboard a product repo
+python3 tools/qqcfg.py remove-repo demo        # take one out (refused while another area names it)
+python3 -m unittest discover -s tests          # seed passes; known-bad changes fail</pre>
+<p><code>validate</code> checks five things: the TOML parses, every area matches its JSON Schema, every
+reference resolves, the policy invariants hold, and <code>generated/</code> matches what <code>generate</code> would
+write. <code>.github/workflows/validate.yml</code> runs it with the tests on every PR and in the merge queue.
+<code>render()</code> itself is pinned by a golden test (<code>tests/golden/</code>): quirq-ai's config there must render
+byte for byte what it rendered before, because each delivered stub's <code>qq-digest</code> covers its header.
+A change that means to alter generated output updates <code>tests/golden/</code> in the same PR.</p>
+<p><code>add-repo</code> and <code>remove-repo</code> are how the one-command setup (quirq-ai/setup) onboards or removes a
+product repo. <code>add-repo</code> appends one public <code>[[repo]]</code> (on <code>main</code>, <code>channels = []</code>, <code>owners = []</code>) to
+<code>repos.toml</code> and a blocking presubmit plus a post-submit builder to <code>pipelines.toml</code>, under a
+<code># --- &lt;repo&gt; ---</code> line. <code>remove-repo</code> deletes the repo's block, its builders and that section line,
+and is refused while any other area still names the repo. Both edit the files as text, so every
+other line and comment stays, and both check that the result parses to the old file with only that
+repo's entries changed. Then they run <code>generate</code> and <code>validate</code>, and if anything fails they put every
+file back. They do not deliver the workflows into the repo (<code>deliver</code>), change gate's settings, or
+move any tool's pin of this repo; each of those is its own pull request. A repo with channels, a
+deploy target or more builders is still edited by hand after <code>add-repo</code>.</p>
+<h4>A user's own org (one-command setup)</h4>
+<p><code>--root DIR</code> names the data to check or generate: <code>DIR/config/</code> and <code>DIR/generated/</code>. Code,
+schema and the postmortem template always come from this checkout, so a user's <code>&lt;org&gt;/qq-config</code>
+holds data only (all 13 areas, <code>generated/</code>, and the pinned infra-config commit):</p>
+<pre>python3 tools/qqcfg.py validate --root ../qq-config
+python3 tools/qqcfg.py generate --root ../qq-config</pre>
+<p>Every repo's <code>source</code> must be exactly <code>&lt;code_host&gt;/&lt;name&gt;</code>, with <code>code_host</code> a <code>github.com/&lt;org&gt;</code>
+and the owner in lower case (a <code>Quirq-AI</code> spelling would still count as quirq-ai). When <code>code_host</code> is <code>github.com/quirq-ai</code>, the thirteen infra
+repos are required as before, and this checkout's own config (the default <code>--root</code>) must be
+quirq-ai's. Any other org lists exactly one infra repo, <code>qq-config</code>. A user org gets no <code>qq-required-*</code> org copies, and its stubs name <code>&lt;org&gt;/qq-config</code> as
+their source. Tool pins are never derived from <code>code_host</code>: the schema requires gate's timing step,
+test-pipelines' sink and <code>other_qq_workflows</code> <code>from</code> to name quirq-ai, so every org runs quirq's
+tools at pinned commits.</p>
+<h3>Layout</h3>
+<pre><code>infra-config/
+├── config/                 the source of truth: one TOML file per area, parsed and never executed
+│   ├── org.toml            system name, backends, roles, pools, secret scopes, budget, rotations,
+│   │                       and the thirteen quirq infra repos
+│   ├── kinds.toml          toolchains and target kinds (year one: latest Python, latest Next.js, Gatsby, npm)
+│   ├── repos.toml          registry of onboarded repos: xo-space, website, xo, innernet
+│   ├── pipelines.toml      builders: presubmit, postsubmit, release
+│   ├── gate.toml           landing gate, verification surface, who may land what
+│   ├── flakes.toml         retries, exoneration, quarantine with expiry
+│   ├── auto_revert.toml    gardener revert caps
+│   ├── rollers.toml        machine-written dependency updates
+│   ├── channels.toml       canary → dev → stable, promotion and rollback rules
+│   ├── fuzz.toml           fuzz engines and schedules
+│   ├── postmortem.toml     postmortem policy and failure tracking
+│   ├── health.toml         health signals (PostHog and CI) that gate promotion
+│   └── perf.toml           benchmarks and alert thresholds
+├── schema/                 JSON Schema (draft 2020-12): area.schema.json plus one per area
+├── templates/              files config points at (postmortem.md)
+├── tools/qqcfg.py          validate + generate (the lucicfg counterpart)
+├── generated/github/       generated output for the github backend; never edit by hand
+├── tests/test_qqcfg.py     the validator's own tests
+├── .github/                CODEOWNERS and this repo's own validate workflow
+├── docs/                   reference copies of the plan (plan.md) and the v0 work items (v0.md)
+└── AGENTS.md               how agents change this repo safely
+</code></pre>
+<p>Every config file begins with the same <code>[area]</code> header: <code>name</code>, <code>status</code> (<code>seed</code> or <code>stub</code>),
+<code>schema</code> version (<code>v0</code>), <code>owners</code> (empty in most areas until suraj fills it in; <code>org</code> names suraj),
+<code>read_by</code> (the systems that will read the file) and <code>chromium</code> (the counterpart an expert should
+read first).</p>
+<h3>Areas and what each expert owns next</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Status</th>
+<th>What the expert owns next</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>org</code></td>
+<td>seed</td>
+<td>Isolated runners for trusted work; OIDC trust for each deploy target; mapping Launchpad onto the backend seam.</td>
+</tr>
+<tr>
+<td><code>kinds</code></td>
+<td>seed</td>
+<td>Recipes adapters for <code>python-service</code>, <code>pytest</code>, <code>python-package</code>, <code>node-app</code>, <code>gatsby-site</code>, <code>npm-app</code> and <code>static-docs</code> that replace the <code>interim</code> commands; github provisioning for node.</td>
+</tr>
+<tr>
+<td><code>repos</code></td>
+<td>seed</td>
+<td>Each repo's own <code>infra/repo.toml</code> (with <code>sync</code>); moving xo-space from Python 3.12 to the org pin; confirming innernet's deploy target.</td>
+</tr>
+<tr>
+<td><code>pipelines</code></td>
+<td>seed</td>
+<td>Switching steps from <code>interim</code> commands to recipes adapters; a gate-side check that delivered stubs match this repo.</td>
+</tr>
+<tr>
+<td><code>gate</code></td>
+<td>seed</td>
+<td>Making the change classes machine-checkable; the gate check app; tree closers. suraj applies the GitHub settings (merge queue, required checks).</td>
+</tr>
+<tr>
+<td><code>flakes</code></td>
+<td>seed</td>
+<td>Exoneration thresholds and enforcing quarantine expiry (v1). test-pipelines reads <code>[verdict]</code> in v0.</td>
+</tr>
+<tr>
+<td><code>auto_revert</code></td>
+<td>seed</td>
+<td>A gardener that stays within the caps and lands reverts only in <code>auto_land_repos</code> (empty in v0, so it proposes); whether deploy failures get their own budget.</td>
+</tr>
+<tr>
+<td><code>rollers</code></td>
+<td>seed</td>
+<td>A Python lockfile for xo-space. rollers generates Dependabot config from the <code>dependabot</code> rollers and runs the toolchain roller.</td>
+</tr>
+<tr>
+<td><code>channels</code></td>
+<td>seed</td>
+<td>Who advances <code>lkgr</code>; what a channel and a rollout percentage mean for each deploy target; rollback.</td>
+</tr>
+<tr>
+<td><code>fuzz</code></td>
+<td>seed</td>
+<td>v0 runs time-boxed property tests in the gate and the canary's fuzz smoke. Fuzz harnesses, orchestration and corpus storage are v1 (schedules marked <code>phase = "v1"</code>).</td>
+</tr>
+<tr>
+<td><code>postmortem</code></td>
+<td>seed</td>
+<td>Grouping failures into recurring classes (v1). The template is <code>templates/postmortem.md</code>, and postmortems live in their tracker issue.</td>
+</tr>
+<tr>
+<td><code>health</code></td>
+<td>seed</td>
+<td>v0 uses CI signals and canary probes only. Wiring PostHog into each repo, event names and xo-space telemetry consent are v1 (signals marked <code>phase = "v1"</code>).</td>
+</tr>
+<tr>
+<td><code>perf</code></td>
+<td>stub</td>
+<td>Benchmark hardware, noise control, and routing alerts to bisection.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Not declared yet, because their phase has not started: hermetic toolchain images (<code>toolchains</code>,
+P3), the remote cache and executor (<code>remote-build</code>, P3/P6) and channel-following installers
+(<code>installer</code>, P5). Each gets a <code>config/&lt;area&gt;.toml</code> and a schema when it starts.</p>
+<h3>Rules the validator enforces</h3>
+<p>Config alone cannot loosen these. They live in <code>tools/qqcfg.py</code>, which is a policy path, so
+changing one needs the policy-owner (suraj).</p>
+<ul>
+<li>Promotion to stable needs the policy-owner. Any channel that reaches people (dev, stable) needs
+a human owner's approval. Only canary, which is agents-only, promotes without one. Builder
+triggers fire without a person, so a release builder may feed only canary; builds reach dev and
+stable only through an approved promotion.</li>
+<li>canary is agents-only and runs unattended every day. It is the fully autonomous loop and serves
+as a research and test environment. dev is for humans plus agents.</li>
+<li>Agents may land only clean reverts, dependency rolls and docs alone. Policy changes need the
+policy-owner, and authors cannot approve their own changes to the verification surface.</li>
+<li>Auto-revert: at most 10 reverts created per rolling 24 h (the window may not be shorter), and
+only clean reverts. The 10 is suraj's; counting reverts created is a default he can change.
+Beneath that cap sit LUCI Bisection's limits: 10 created per failure type, 4 auto-submitted for
+build failures, none auto-submitted for test failures, and only culprits up to 6 h old.
+Submission also needs the repo in <code>auto_land_repos</code>, which may name only repos in <code>repos.toml</code>;
+it is empty in v0, so every revert is proposed and the policy-owner merges it.</li>
+<li>Untrusted pools hold no secrets. Any builder that runs code from an open change (presubmit, or a
+<code>change</code> or <code>queue</code> trigger) and PR fuzzing run only in pools without secrets.</li>
+<li>Post-submit builders are never cancelled. Repos are public only.</li>
+</ul>
+<p>The validator also checks the files against each other. Every repo needs a blocking presubmit
+builder on <code>change</code> and <code>queue</code> and a post-submit mirror. A blocking builder must fit within the
+gate's <code>max_minutes</code>. Repos may use only kinds whose phase is <code>year-one</code>, so containers wait.
+Every name used in one file must be defined in another.</p>
+<h3>Backends: GitHub now, Launchpad later</h3>
+<p>v0 runs on GitHub. Execution later moves to Launchpad, quirq's own cloud, so the config stays
+backend-neutral:</p>
+<ul>
+<li>Triggers have neutral names: <code>change</code>, <code>queue</code>, <code>land</code> and <code>schedule</code>. The github generator maps
+them to <code>pull_request</code>, <code>merge_group</code> and <code>push</code>.</li>
+<li>Anything specific to one backend sits in a sub-table named after that backend (<code>[pool.github]</code>,
+<code>[toolchain.github]</code>) or is chosen by a <code>backend</code> field (<code>pipelines.defaults</code>,
+<code>gate.merge_queue</code>). <code>org.toml</code> lists the backends.</li>
+<li>All GitHub-specific tooling sits in one section of <code>tools/qqcfg.py</code>, and its output goes to
+<code>generated/github/</code>.</li>
+</ul>
+<h3>Choices made where the plan does not decide</h3>
+<p>Where the plan left a choice open, I picked the simplest well-known option:</p>
+<ul>
+<li><strong>TOML for config.</strong> The plan already uses TOML for repo manifests ("parsed and never executed,
+like DEPS"), and Python reads it with the standard-library <code>tomllib</code>. Starlark would need an
+interpreter and would make config executable.</li>
+<li><strong>JSON Schema 2020-12, checked with <code>jsonschema</code>.</strong> It is independent of any language, so other
+tools and editors can use the same schemas.</li>
+<li><strong>GitHub Actions as the only generator target.</strong> Every presubmit and post-submit builder for
+xo-space, innernet and website is generated into <code>generated/github/&lt;repo&gt;/</code> and copied into the repo with
+<code>python3 tools/qqcfg.py deliver &lt;repo&gt; &lt;checkout&gt;</code> (V0-CFG-02). The binding drift check is
+<code>.github/workflows/qq-drift.yml</code> here, meant to run as an organization-required workflow in every
+product repo (gate's <code>qq-drift</code> org ruleset, which is off: quirq-ai is on GitHub Free, so no repo
+requires it yet): it fails a PR whose <code>qq-*.yml</code> stubs differ from infra-config <code>main</code>, are renamed or missing,
+or whose own workflows define a check with a generated builder's name (YAML is parsed, so quoting,
+flow style or a <code>name:</code> on another job id don't escape it). While a PR leaves its <code>qq-*</code> files
+alone, stubs <code>main</code> generated within <code>drift_grace_days</code> (pipelines.toml) pass with a warning, so a
+generator change doesn't turn open product PRs red before redelivery; a PR that edits them must
+match <code>main</code> exactly. A repo's <code>other_qq_workflows</code> (repos.toml), such as rollers' <code>qq-roll-land.yml</code>, belong to another quirq tool: <code>deliver</code> leaves them in place and the drift check does not count them as stale stubs, though each, when present, must match the sha256 recorded there (its owner bumps it on redelivery) and may not define a generated builder's check. qq-drift runs qqcfg from the infra-config commit its ruleset pins, not from <code>main</code> at run time, so a change here reaches product PRs only when gate moves that pin: merge here, have gate repin, then redeliver. Before running anything it refuses a run that is not this file from quirq-ai/infra-config, a pin that is not a full commit SHA, and a checked-out commit that is not that pin or not on infra-config <code>main</code>; it installs only PyYAML, hash-checked with no dependencies (<code>requirements-drift.txt</code>, bumped with its Python version), and tests run each of these guards. It refuses symlinked workflows. PRs into other branches than the default pass. A PR cannot edit
+it, because it lives here. Each stub
+also carries a <code># qq-digest:</code> line and a fast in-repo drift step. Post-submit builders also run on <code>workflow_dispatch</code> with a <code>commit</code> input, so the gardener can backfill main commits a batched push skipped (V0-GAR-01). A backfill must be dispatched from the default branch, and a refused one stores no results. Such a run's check shows on the branch tip, so find it by its run name (<code>&lt;builder&gt; &lt;commit&gt;</code>), not by the tip's checks. Each repo's merge-queue builder ends with gate's timing step (V0-GAT-04), capped at 3 minutes and unable to fail the check. Every action in a generated workflow is pinned by full commit SHA. <code>generate</code> also writes <code>.github/workflows/qq-required-&lt;builder&gt;.yml</code> here, one per presubmit builder: the same commands as the delivered stub (no timing step or result sink), guarded to run only in its own repo, with no concurrency group (GitHub says a ruleset workflow must not be cancelled in progress) and no job over gate's admission <code>max_minutes</code> (validate checks it; gate #13's rulesets refuse longer ones). Gate's org rulesets would require it in each product repo, pinned by commit, so a product PR cannot edit its own tests away (rollers audit R-2); they are all off on GitHub Free, so today xo-space and innernet require their delivered stub instead (website's rulesets are not applied yet). Changing a copy takes effect only when a gate PR moves that pin. Canary builders are <code>generate = false</code>: the canary runs in quirq-ai/release (<code>canary.yml</code>, V0-REL-03), not in the product repos. Steps are interim commands in
+<code>kinds.toml</code> until the recipes adapters exist (V0-REC-02, V0-REC-03); they pass locally against
+xo-space <code>c3cea98</code> (Python 3.14.8) and innernet <code>da9b84c</code> (pnpm install, typecheck, build). xo-space's
+hand-written <code>tests.yml</code> is gone (xo-space #217); gate requires only <code>xo-space-presubmit</code> there.</li>
+<li><strong>Squash merges</strong> for every repo (suraj, 2026-10-04). <strong>Dependabot</strong> for ecosystem rolls (the
+plan lists it as an option). <strong>GitHub Issues</strong> for postmortem and fuzz tracking. <strong>Atheris</strong>
+(Python) and <strong>Jazzer.js</strong> (JS/TS) as fuzz engines, because neither needs containers. Cron
+schedules are in UTC.</li>
+</ul>
+<h3>Open decisions</h3>
+<p><code>python3 tools/qqcfg.py validate --todos</code> lists all of them; the config values v0 needs are
+marked <code>TODO(suraj, v0)</code>. <code>validate</code> also lists every empty <code>owners</code> list and rotation, and whether the
+compute ceiling is set. The ones for suraj:</p>
+<ul>
+<li>whether an agent may roll stable back on its own when a health signal breaches (<code>channels.toml</code>)</li>
+<li>the PostHog host and projects (<code>health.toml</code>)</li>
+<li><strong>v0:</strong> the owners of every area and repo, and the members of every rotation</li>
+</ul>
+<p>Decided by suraj on 2026-10-06 but not written into config yet, so <code>validate --todos</code> still lists
+them: the daily canary deploy at 06:17 UTC (<code>channels.toml</code>; release's <code>canary.yml</code> repeats it, and
+a release test checks they match), a revert cap of 10 a day
+(<code>auto_revert.toml</code>), stable every two weeks with each promotion his to approve (<code>channels.toml</code>),
+and no new compute spend as the monthly CI ceiling (<code>org.toml</code>).</p>
+<h3>How this fits with the other repos</h3>
+<p><code>gate</code> reads <code>gate</code>, <code>kinds</code>, <code>org</code>, <code>pipelines</code> and <code>repos</code> to decide which checks are required. <code>gardener</code>
+reads <code>auto_revert</code>, <code>postmortem</code>, <code>pipelines</code>, <code>repos</code> and <code>org</code> (and later <code>flakes</code>). <code>release</code> reads
+<code>channels</code>, <code>health</code>, <code>pipelines</code> and <code>repos</code>;
+<code>installer</code> follows release's published <code>channels.json</code>, not this repo.
+<code>rollers</code> reads <code>rollers</code>, <code>kinds</code>, <code>org</code> and <code>repos</code> and moves the toolchain pins in each product repo's <code>infra/repo.toml</code>. Per the plan, <code>sync</code> will own the single
+parser library. sync exists but parses only manifests, so every Python reader goes through
+<code>qqcfg.load</code> and writes no parser of its own. monitoring, a read-only TypeScript dashboard, parses
+<code>channels.toml</code> and <code>repos.toml</code> itself.</p>
+<h3>Licence</h3>
+<p>Apache-2.0; see <a href="https://github.com/quirq-ai/infra-config/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

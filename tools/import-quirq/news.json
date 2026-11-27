@@ -1,0 +1,104 @@
+[
+ {
+  "slug": "news-quirq-receives-350k-grant-from-google-for-startups",
+  "title": "Quirq Receives $350k Grant from Google for Startups",
+  "summary": "Google backs the environment layer: $350k in Google Cloud credits and support to scale quirq environments on GCP.",
+  "url": "https://www.xo.builders/blog/xo-google"
+ },
+ {
+  "slug": "news-quirq-integrates-one-click-google-antigravity",
+  "title": "Quirq Integrates One-Click Google Antigravity",
+  "summary": "Google's agent-first IDE, deployable inside a quirq environment in one click.",
+  "url": "https://www.xo.builders/blog/xo-google"
+ },
+ {
+  "slug": "news-quirq-receives-200k-grant-from-gaia",
+  "title": "Quirq Receives $200k Grant from Gaia",
+  "summary": "Gaia backs local intelligence on quirq: your-own-LLM launchpad templates for the fleet.",
+  "url": "https://www.xo.builders/blog/xo-gaia"
+ },
+ {
+  "slug": "news-quirq-enters-the-nvidia-inception-program",
+  "title": "Quirq Enters the NVIDIA Inception Program",
+  "summary": "Serious compute behind agent workspaces.",
+  "url": "https://www.xo.builders/blog/xo-nvidia"
+ },
+ {
+  "slug": "news-quirq-integrates-vs-code-and-azure-compatibility",
+  "title": "Quirq Integrates VS Code and Azure Compatibility",
+  "summary": "Edit environments in VS Code and deploy them on Azure: the Microsoft stack, supported.",
+  "url": "https://www.xo.builders/blog/xo-microsoft"
+ },
+ {
+  "slug": "news-quirq-partners-on-the-one-click-okx-agent",
+  "title": "Quirq Partners on the One-Click OKX Agent",
+  "summary": "Runtime partner for the OKX Agent Marketplace One-Click Agent.",
+  "url": "https://www.xo.builders/blog/xo-okx"
+ },
+ {
+  "slug": "news-quirq-integrates-one-click-openclaw",
+  "title": "Quirq Integrates One-Click OpenClaw",
+  "summary": "The open-source agent framework, deployable inside quirq workspaces in one click.",
+  "url": "https://www.xo.builders/blog/xo-openclaw"
+ },
+ {
+  "slug": "news-quirq-integrates-one-click-nebius",
+  "title": "Quirq Integrates One-Click Nebius",
+  "summary": "Agent fleets on Nebius infrastructure: deployed declaratively, organized around quirqs, not tokens.",
+  "url": "https://www.xo.builders/blog/xo-nebius"
+ },
+ {
+  "slug": "news-quirq-integrates-magicpath",
+  "title": "Quirq Integrates MagicPath",
+  "summary": "Two takes on one conviction: humans and agents share a workspace.",
+  "url": "https://www.xo.builders/blog/xo-magicpath"
+ },
+ {
+  "slug": "news-quirq-integrates-claude-oauth",
+  "title": "Quirq Integrates Claude OAuth",
+  "summary": "Sign in with Claude: bring your Anthropic subscription to any quirq environment.",
+  "url": "https://www.xo.builders/blog/xo-anthropic"
+ },
+ {
+  "slug": "news-quirq-aws",
+  "title": "quirq × AWS",
+  "summary": "The first cloud partnership. AWS for Startups made the workspace image cloud-native from day one.",
+  "url": "https://www.xo.builders/blog/xo-aws"
+ },
+ {
+  "slug": "news-quirq-elevenlabs",
+  "title": "quirq × ElevenLabs",
+  "summary": "Research into the ElevenLabs Agents Platform: what it takes to manage user credentials programmatically when building multi-tenant voice-agent platforms.",
+  "url": "https://www.xo.builders/blog/xo-elevenlabs"
+ },
+ {
+  "slug": "news-quirq-hysolwin-green-energy",
+  "title": "quirq × Hysolwin Green Energy",
+  "summary": "Hysolwin Green Energy runs on quirq. A green-energy team putting agent workspaces to work.",
+  "url": "https://www.xo.builders/blog/xo-hysolwin"
+ },
+ {
+  "slug": "news-quirq-ppai-innovations",
+  "title": "quirq × PPAI Innovations",
+  "summary": "PPAI Innovations runs on quirq. Building with agent workspaces, one project at a time.",
+  "url": "https://www.xo.builders/blog/xo-ppai"
+ },
+ {
+  "slug": "news-quirq-enviroedge-partner",
+  "title": "quirq × EnviroEdge Partner",
+  "summary": "EnviroEdge Partner runs on quirq. Environmental work, measured the unit-of-work way.",
+  "url": "https://www.xo.builders/blog/xo-enviroedge"
+ },
+ {
+  "slug": "news-quirq-evm-capital",
+  "title": "quirq × EVM Capital",
+  "summary": "quirq and EVM Capital. A chapter in progress.",
+  "url": "https://www.xo.builders/blog/xo-evm-capital"
+ },
+ {
+  "slug": "news-quirq-the-world",
+  "title": "quirq × the World",
+  "summary": "The public record: launches, competitions, and moments from the team, collected as they happened.",
+  "url": "https://www.xo.builders/blog/xo-community"
+ }
+]

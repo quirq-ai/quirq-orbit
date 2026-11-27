@@ -1,0 +1,173 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo holds
+one <strong>adapter</strong> per target kind, found by one loader. An adapter is the only place in quirq infra
+that may name a language, a build tool or a test runner.</p>
+<p><strong>Chromium counterpart:</strong> the recipes in <code>chromium/tools/build</code> and the <code>recipes-py</code> engine that runs
+them. As there, the core says <em>what</em> to do with a target and the recipe says <em>how</em> for its kind.</p>
+<h3>How it works (v0)</h3>
+<ul>
+<li>A repo's manifest (<code>infra/repo.toml</code>, owned and parsed by <code>quirq-ai/sync</code>) lists typed targets.
+Each target has a <code>kind</code>, such as <code>python-service</code>, <code>pytest</code> or <code>node-app</code>. The list of kinds lives
+in <code>quirq-ai/infra-config</code> (<code>config/kinds.toml</code>).</li>
+<li>One loader resolves a kind to its adapter. An adapter implements some of the capabilities <code>fetch</code>,
+<code>build</code>, <code>test</code>, <code>package</code>, <code>run</code>, <code>deploy</code>, <code>bench</code> and <code>fuzz</code>. A capability it does not implement
+is a declared state, not an error: a docs site simply has no <code>test</code>.</li>
+<li>A capability turns a target into <strong>actions</strong>, shaped like the REAPI <code>Action</code>: a command, an input
+root digest, platform properties and an environment, producing output digests, an exit code and
+test results (JUnit XML). The same action runs locally, on a GitHub Actions runner, or later on a
+remote executor (<code>quirq-ai/remote-build</code>).</li>
+<li>The adapters are meant to replace the <code>interim</code> commands in infra-config's <code>kinds.toml</code>. Product
+CI does not run them yet: the workflows infra-config generates still run those <code>interim</code> commands.</li>
+</ul>
+<h3>The contract</h3>
+<pre>from qqrecipes import loader
+from qqrecipes.contract import Adapter, Service
+class MyKind(Adapter):                       # qqrecipes/adapters/my_kind.py, for kind "my-kind"
+    kind = "my-kind"
+    toolchain = "some-toolchain"             # a toolchain name from infra-config kinds.toml
+    def build(self, target, ctx):            # one method per capability it implements
+        return [self.action(target, ctx, "build", "compile", ["{toolchain:some-toolchain}tool", "build"])]
+ADAPTER = MyKind()
+loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "implemented", ...}</pre>
+<ul>
+<li><strong>Loader.</strong> <code>loader.load(kind)</code> imports <code>qqrecipes.adapters.&lt;kind with - as _&gt;</code> and returns its
+<code>ADAPTER</code>. Nothing registers adapters: adding a kind adds a module and edits no core file. A kind
+with no module is <code>AdapterNotFound</code>; an adapter that fails to import raises, so a broken install
+never looks like a missing kind.</li>
+<li><strong>Actions.</strong> <code>Action</code> carries the command, the input root digest (every file matched by the
+target's <code>srcs</code> and its deps' <code>srcs</code>), environment, declared outputs, the pins of the toolchains
+it uses, and where it writes JUnit XML. <code>Action.digest()</code> is the cache key. Commands hold
+placeholders such as <code>{toolchain:NAME}</code> and <code>{out}</code> that the executor resolves, so the digest is
+the same on every machine of the same platform. The key also holds the platform and a
+fingerprint of the recipes code. An action on a toolchain the manifest doesn't pin by a real
+digest (absent, or an all-zero placeholder) is never cacheable, and <code>results.json</code> marks a run
+not cacheable when it used the tool on PATH because no <code>--toolchain</code> root was given. The
+examples' pins are still placeholders, so their actions are never cacheable. Caller <code>QQ_PROPERTY_*</code> settings reach a command
+only through the action's env, so they are part of the key.
+A <code>srcs</code> glob that matches no file is an error, not an empty input.</li>
+<li><strong>Benchmarks.</strong> <code>bench</code> returns a service action with a <code>Bench</code> spec (<code>params.bench</code>: measure
+<code>startup</code> or <code>latency</code>, paths, samples, warmup). The executor starts the service, measures,
+tears it down, and writes the raw samples and summary metrics, each with a unit, to
+<code>{out}/bench/</code> plus one JUnit case. quirq-ai/perf stores them as Results (V0-PRF-01).</li>
+<li><strong>Results.</strong> Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
+one-case report from its exit code, so the result sink (V0-TST-01) sees every step.</li>
+<li><strong>Core stays agnostic.</strong> Only <code>src/qqrecipes/adapters/&lt;kind&gt;</code> may name a language or tool.
+<code>tools/agnostic_guard.py</code> fails CI otherwise, and CI checks that every adapter implements exactly
+the capabilities infra-config's <code>kinds.toml</code> lists for its kind.</li>
+</ul>
+<pre>qqrecipes kinds                                     # adapters and their capabilities
+qqrecipes plan test --repo PATH [--json]            # the actions, without running them
+qqrecipes execute test --repo PATH [--toolchain python=ROOT]   # run them here; results in .qq/out
+qqrecipes check-kinds --infra-config PATH           # adapters agree with kinds.toml</pre>
+<p><code>execute</code> runs actions on this machine; <code>quirq-ai/remote-build</code> holds the executor interface
+(V0-RBE-01), which nothing calls yet. <code>depot</code>'s <code>qq build</code> and <code>qq test</code> (V0-DEP-03) run the same
+plan through this package. Manifests are read only
+through <code>qqsync</code>, pinned by commit in <code>pyproject.toml</code>.</p>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+<th>What CI proves today</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-REC-01</td>
+<td>Adapter contract and loader</td>
+<td>#2</td>
+<td>merged</td>
+<td>unit tests, agnosticism guard, adapters match infra-config <code>kinds.toml</code></td>
+</tr>
+<tr>
+<td>V0-REC-02</td>
+<td><code>python-service</code> and <code>pytest</code> adapters</td>
+<td>#3</td>
+<td>merged</td>
+<td>xo-space's full pytest suite runs through the adapters</td>
+</tr>
+<tr>
+<td>V0-REC-03</td>
+<td><code>node-app</code> adapter (Next.js)</td>
+<td>#4</td>
+<td>merged</td>
+<td>innernet installs and typechecks through the adapter (it has no tests)</td>
+</tr>
+<tr>
+<td>V0-REC-04</td>
+<td>Property tests in <code>test</code></td>
+<td>#5</td>
+<td>merged</td>
+<td>a planted bug in each kind is caught, in this repo's presubmit only; product CI does not run recipes yet</td>
+</tr>
+<tr>
+<td>V0-REC-05</td>
+<td><code>deploy</code> to a canary test environment</td>
+<td>#6</td>
+<td>merged</td>
+<td>both examples, xo-space and innernet deploy, pass their probes and are torn down on the CI runner</td>
+</tr>
+</tbody>
+</table></div>
+<p>All of this runs in this repo's presubmit, not yet in the gate. xo-space and innernet are checked
+out at pinned commits and read through <code>quirq-ai/sync</code>'s fixture manifests, not their own
+<code>infra/repo.toml</code> (both repos have one now, but this presubmit does not read it). Toolchains come from
+GitHub's setup actions at the pinned versions, not yet from <code>quirq-ai/toolchains</code>.</p>
+<h3>Adapters</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Capabilities</th>
+<th>Toolchain</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python-service</code></td>
+<td>fetch, build, run, deploy, bench</td>
+<td>python</td>
+<td>venv in <code>.qq/venv</code> from the pinned CPython; build byte-compiles srcs; run/deploy emit a service action for <code>params.entry</code> listening on <code>$PORT</code> (<code>params.port_env</code>), which <code>deploy</code> starts and probes (V0-REC-05); bench times start-up (<code>params.bench</code>, V0-PRF-01)</td>
+</tr>
+<tr>
+<td><code>pytest</code></td>
+<td>fetch, test</td>
+<td>python</td>
+<td>installs <code>requirements-dev.txt</code>; writes JUnit XML to <code>{out}/junit/&lt;target&gt;.pytest.xml</code></td>
+</tr>
+<tr>
+<td><code>node-app</code></td>
+<td>fetch, build, test, run, deploy, bench</td>
+<td>node (bundles pnpm)</td>
+<td><code>pnpm install --frozen-lockfile</code>; build runs the <code>build</code> script; test runs <code>typecheck</code> (or <code>tsc --noEmit</code>), then vitest with JUnit or the <code>test</code> script; run/deploy use <code>next start</code>; bench times GETs of <code>params.bench.paths</code> once it is up (V0-PRF-01)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Property tests (V0-REC-04).</strong> Hypothesis (Python) and fast-check (TypeScript) tests run as
+ordinary tests in <code>test</code>, deterministic and time-boxed: the pytest adapter loads its
+<code>qq_hypothesis</code> plugin (derandomized, no example database, 100 examples, no per-example deadline,
+unless the repo picked its own profile), and the node-app adapter runs vitest with fast-check
+configured globally (seed 42, 100 runs, 5 s per property). A property cut short by its time limit
+passes with fewer runs, so a slow runner explores less. <code>QQ_PROPERTY_*</code> variables override the
+bounds (and so change the action key); the test action's timeout bounds the whole run. <code>tools/check_planted_bug.py</code> plants an
+input-handling bug in an example and checks a property test catches it; CI runs it for both kinds.</p>
+<p><strong>Deploy (V0-REC-05).</strong> <code>qqrecipes execute deploy</code> builds each target, starts its service action
+on a free port in the canary test environment, waits until its ready path answers (below HTTP 500), runs its HTTP probes
+(status below 400 passes) and always tears it down, killing the whole process group. Ready and
+probe paths must start with a single <code>/</code>, and readiness and probes follow redirects only within the deployment. Start and
+each probe are JUnit test cases; <code>results.json</code> records the deployment. v0's only backend is
+<code>local</code>: on GitHub, the Actions runner. <code>qqrecipes execute run</code> starts a service and keeps it up.
+CI deploys and probes both examples, xo-space and innernet.</p>
+<p>infra-config's <code>kinds.toml</code> also lists <code>gatsby-site</code>, <code>static-docs</code> and <code>container-image</code>, which
+have no adapter yet (<code>qqrecipes check-kinds</code> notes each one).</p>
+<p>Each adapter's docstring lists its <code>params</code>. <code>examples/</code> holds small repos that CI builds and tests
+through the adapters, and CI also runs xo-space's pytest suite and innernet's build and typecheck through them.</p>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/recipes/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks with <code>python -m pytest</code>.</p>
+<h3>Licence</h3>
+<p>Apache-2.0; see <a href="https://github.com/quirq-ai/recipes/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

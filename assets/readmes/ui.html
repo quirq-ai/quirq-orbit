@@ -1,0 +1,69 @@
+<h2>Quirq UI registry</h2>
+<p>A shadcn registry (plus docs site) for every Astryx component, block template and page template, built with Next.js.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Items</th>
+<th>Registry name</th>
+<th>Installs to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Components</td>
+<td>166</td>
+<td><code>&lt;kebab-name&gt;</code> e.g. <code>date-input</code></td>
+<td><code>components/ui/&lt;name&gt;.tsx</code></td>
+</tr>
+<tr>
+<td>Blocks</td>
+<td>659</td>
+<td><code>block-&lt;kebab-id&gt;</code> e.g. <code>block-alert-dialog-delete-confirmation</code></td>
+<td><code>components/&lt;BlockId&gt;.tsx</code></td>
+</tr>
+<tr>
+<td>Page templates</td>
+<td>55</td>
+<td><code>template-&lt;id&gt;</code> e.g. <code>template-dashboard</code></td>
+<td><code>app/&lt;id&gt;/page.tsx</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>button</code>, <code>metric-strip</code>, <code>astryx-base</code> and <code>astryx-nextjs</code> are hand-written; everything else is generated.</p>
+<pre>bun install
+bun run dev                 # docs site on http://localhost:3000 (builds public/r first)
+bun run build               # registry JSON + production build
+bun run registry:generate   # regenerate items from the installed @astryxdesign/* packages
+bun run registry:build      # sync URLs from homepage, then registry.json -&gt; public/r/*.json (runs before dev/build)</pre>
+<p>Re-run <code>registry:generate</code> after bumping <code>@astryxdesign/core</code> or <code>@astryxdesign/cli</code> (they are pinned to an
+exact version so the generated sources match the installed packages). Generated sources live in
+<code>registry/astryx/&lt;name&gt;/</code>, <code>registry/astryx/blocks/</code> and <code>registry/astryx/templates/</code>; the docs catalog is
+<code>src/registry/catalog.generated.ts</code> and the preview loaders are <code>src/registry/previews.generated.ts</code>. Don't
+hand-edit generated files, add the item name to <code>HAND_WRITTEN</code> in <code>scripts/generate-registry.mjs</code> first.</p>
+<h3>Layout</h3>
+<pre><code>registry.json                 shadcn registry definition (homepage = the origin items install from)
+registry/astryx/              registry item sources (components, blocks/, templates/, nextjs-setup/)
+scripts/generate-registry.mjs regenerates registry.json + sources + docs catalog
+src/app/docs/                 docs routes: /docs, /docs/installation, /docs/[kind], /docs/[kind]/[name]
+src/app/preview/[name]/       standalone render of one block or template (iframed by the docs)
+src/docs/                     docs UI (client components built with Astryx)
+src/registry/                 catalog + source helpers (server) and generated data
+public/r/                     built registry JSON (generated, git-ignored)
+</code></pre>
+<h3>Notes</h3>
+<ul>
+<li>Every docs page is prerendered with <code>generateStaticParams</code> (Cache Components is on). Source code shown on item
+pages is read from disk at build time through a <code>"use cache"</code> function.</li>
+<li>Astryx is consumed precompiled (<code>dist</code> + <code>astryx.css</code>), so no StyleX build step is needed for the components.
+About 26 blocks/templates call <code>stylex.create()</code> themselves; <code>next.config.ts</code> runs Babel + the StyleX plugin
+(runtime injection) on just those files via a scoped Turbopack rule.</li>
+<li><code>app/globals.css</code> uses the same Astryx + Tailwind v4 layer order that the <code>astryx-nextjs</code> item installs.</li>
+<li><code>AstryxProviders</code> wraps the app in the Theme and routes every Astryx link through <code>next/link</code>.</li>
+<li><strong>Registry URL, one place:</strong> <code>homepage</code> in <code>registry.json</code>. Change it and run <code>bun run registry:build</code> (it also
+runs before <code>dev</code>/<code>build</code>): every item's dependency on another item in this registry is rewritten to
+<code>&lt;homepage&gt;/r/&lt;name&gt;.json</code>, <code>public/r</code> is rebuilt, and the docs' install commands follow. Deploy the site at
+that URL so <code>/r/*.json</code> is served there.</li>
+<li><code>.mcp.json</code> wires up <code>next-devtools-mcp</code>, which talks to the dev server's <code>/_next/mcp</code> endpoint (errors, routes,
+per-route compilation).</li>
+</ul>

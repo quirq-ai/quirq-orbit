@@ -1,0 +1,59 @@
+<h2>qq docs</h2>
+<p>The docs for qq, quirq's build and release infrastructure, are live at
+<a href="https://docs.quirq.dev/" target="_blank" rel="noopener">docs.quirq.dev</a>. XO Space docs are at
+<a href="https://docs.xo.builders/" target="_blank" rel="noopener">docs.xo.builders</a>. New here? Start at
+<a href="https://docs.quirq.dev/docs" target="_blank" rel="noopener">docs.quirq.dev/docs</a>, which says what qq does and which guide to
+read first. The rest of this file is for people working on the docs site itself.</p>
+<p>The videos in <code>public/videos/</code> are rendered from real qq runs by the scripts in
+<a href="https://github.com/quirq-ai/docs/blob/main/scripts/videos/README.md" target="_blank" rel="noopener"><code>scripts/videos/</code></a>.</p>
+<p>Run development server:</p>
+<pre>pnpm dev</pre>
+<p>Open <a href="http://localhost:3100" target="_blank" rel="noopener">http://localhost:3100</a> with your browser to see the result.</p>
+<h3>Explore</h3>
+<p>In the project, you can see:</p>
+<ul>
+<li><code>src/lib/source.ts</code>: Code for content source adapter, <a href="https://fumadocs.dev/docs/headless/source-api" target="_blank" rel="noopener"><code>loader()</code></a> provides the interface to access your content.</li>
+<li><code>src/lib/layout.shared.tsx</code>: Shared options for layouts, optional but preferred to keep.</li>
+</ul>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/app/docs</code></td>
+<td>The documentation layout and pages.</td>
+</tr>
+<tr>
+<td><code>src/app/api/search/route.ts</code></td>
+<td>The Route Handler for search.</td>
+</tr>
+<tr>
+<td><code>src/app/api/chat/route.ts</code></td>
+<td>The Route Handler for AI chat.</td>
+</tr>
+<tr>
+<td><code>src/app/og/docs</code></td>
+<td>OG image generation for docs pages.</td>
+</tr>
+<tr>
+<td><code>src/app/llms.txt</code></td>
+<td>LLM-friendly plain text content route.</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Fumadocs MDX</h4>
+<p>A <code>source.config.ts</code> config file has been included, you can customise different options like frontmatter schema.</p>
+<p>Read the <a href="https://fumadocs.dev/docs/mdx" target="_blank" rel="noopener">Introduction</a> for further details.</p>
+<h3>Learn More</h3>
+<p>To learn more about Next.js and Fumadocs, take a look at the following
+resources:</p>
+<ul>
+<li><a href="https://nextjs.org/docs" target="_blank" rel="noopener">Next.js Documentation</a> - learn about Next.js
+features and API.</li>
+<li><a href="https://nextjs.org/learn" target="_blank" rel="noopener">Learn Next.js</a> - an interactive Next.js tutorial.</li>
+<li><a href="https://fumadocs.dev" target="_blank" rel="noopener">Fumadocs</a> - learn about Fumadocs</li>
+</ul>

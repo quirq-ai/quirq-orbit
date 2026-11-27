@@ -1,0 +1,136 @@
+<p>Instants turns folders of past research and experiments into Instagram-style carousel posts, so you can browse, rediscover and showcase your work. Drop in new data in any format (notes, CSV, JSON, images, code) and it becomes a new post.</p>
+<p>The library of posts is called <strong>Curie</strong>, after Marie Curie, who kept meticulous notebooks of every experiment.</p>
+<h3>Run it</h3>
+<p>Use Node.js 22.13 or newer.</p>
+<pre>npm install
+npm run dev        # http://localhost:5180</pre>
+<p>Pages: Feed (<code>/</code>, with an All posts / Videos filter), Library, Topics, Videos, Insights, Sources (scan, generate, Space), Add (upload new data), Unlock (deploys only), and a slide gallery at <code>/dev/slides</code>.</p>
+<p>Copy <code>.env.example</code> to <code>.env.local</code> for anything beyond the defaults. Nothing is required locally: without <code>ANTHROPIC_API_KEY</code> generation uses your <code>claude</code> login.</p>
+<h3>Generate posts</h3>
+<pre>npm run research                    # new and changed folders under the default roots
+npm run research -- --force         # regenerate everything
+npm run research -- path/to/folder  # specific folders
+npm run research -- --concurrency 3</pre>
+<p>Each folder is read (all formats, git history, images), summarized into a numbered source list, and sent to Claude, which returns a structured post. Records are written to the content store's <code>posts/&lt;slug&gt;.json</code> and media to its <code>media/&lt;slug&gt;/</code> (served at <code>/research/media/...</code>). The same engine runs from the Sources and Add pages.</p>
+<h3>Content store and Spacehub sync</h3>
+<p>Everything Instants generates lives in one store directory:</p>
+<pre><code>posts/&lt;slug&gt;.json          post records
+media/&lt;slug&gt;/*             slide images        -&gt; /research/media/&lt;slug&gt;/&lt;file&gt;
+videos/&lt;slug&gt;.mp4|.jpg     videos and posters  -&gt; /research/videos/&lt;slug&gt;.mp4
+videos/&lt;slug&gt;.status.json  ready render result
+sources/&lt;slug&gt;/*           uploaded sources (+ .upload.json)
+instants.json, README.md   manifest and layout notes
+</code></pre>
+<p>The store is <code>.research-cache/store/</code> until a space is connected, then the Spacehub clone at <code>.research-cache/space/&lt;space&gt;__&lt;project&gt;/</code>. Per-user state stays outside it: <code>activity.json</code> (saves, pins, notes, reads), <code>sources.json</code> (scan cache), <code>space.json</code> (space config), <code>space-pending.json</code> (auto-generate failures) and <code>videos-work/&lt;slug&gt;/</code> (video agent working dirs and live status).</p>
+<p><code>npm run migrate-store</code> moves content from the older layout (<code>public/research</code>, <code>.research-cache/posts|uploads|videos</code>) into the store. It is idempotent and also runs on server start.</p>
+<p>On Sources, the <strong>Space</strong> card connects a Spacehub project (default <code>quirq/curie</code>): it checks access with <code>spacehub project view</code>, clones (or adopts an existing clone), copies local content in without deleting anything remote, and runs <code>spacehub project sync --auto --interval 5</code> as a supervised child (restarted with backoff; a conflict, exit 2, pauses sync until you resolve it). Sources that arrive from the space without a post are listed as pending; with Auto-generate on they are posted automatically, one at a time. Disconnect copies the space content back to the local store.</p>
+<p>Test overrides: <code>INSTANTS_SPACEHUB_BIN</code> (the CLI used for view/clone/sync) and <code>INSTANTS_SPACE_SYNC_CMD</code> (a shell command run instead of the sync).</p>
+<h3>Videos</h3>
+<p>Any post can become a short video from its Video panel (or <code>npm run video -- &lt;slug&gt; --aspect 9:16 --length 30</code>). An unattended local <code>claude</code> agent runs the HyperFrames skill with shell and file tools in <code>.research-cache/videos-work/&lt;slug&gt;/</code> and writes the mp4 and poster into the store. It needs a logged-in <code>claude</code> CLI with the HyperFrames skill and <code>ffmpeg</code>, so it works on a dev machine, not in the container.</p>
+<h3>Deploy</h3>
+<p>The image serves the app on port 3000 and reads its library from Curie (or any Spacehub project).</p>
+<pre>npm run vendor:spacehub   # copy your private spacehub CLI into .spacehub-cli/ (gitignored)
+docker build --platform linux/amd64 -t registry.xo.builders/instants-xo-tpbhrsi/app:latest .
+docker push registry.xo.builders/instants-xo-tpbhrsi/app:latest</pre>
+<p>Without <code>.spacehub-cli/</code> the image still builds, but space sync is off and the library starts empty.</p>
+<p>Set these on the deployment:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SPACEHUB_TOKEN</code></td>
+<td>for sync</td>
+<td>Output of <code>spacehub auth token</code>. The entrypoint logs the CLI in with it on start.</td>
+</tr>
+<tr>
+<td><code>INSTANTS_SPACE</code></td>
+<td>for sync</td>
+<td>Project to connect on first boot, e.g. <code>quirq/curie</code>.</td>
+</tr>
+<tr>
+<td><code>INSTANTS_ADMIN_TOKEN</code></td>
+<td>for actions</td>
+<td>Any long random string. Open <code>/unlock</code> and enter it to save, note, generate and manage the space from a non-localhost domain. Unset, the production server refuses every action and the site is read-only (only <code>next dev</code> trusts localhost).</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code></td>
+<td>for generation</td>
+<td>Generates posts through the API (the container has no <code>claude</code> login).</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_SERVER</code></td>
+<td>no</td>
+<td>Hub other than <code>wss://hub.quirq.dev</code>.</td>
+</tr>
+<tr>
+<td><code>GIT_AUTHOR_NAME</code>, <code>GIT_AUTHOR_EMAIL</code></td>
+<td>no</td>
+<td>Identity for sync commits (default <code>Instants</code>).</td>
+</tr>
+<tr>
+<td><code>INSTANTS_ROOTS</code></td>
+<td>no</td>
+<td>Colon-separated folders to scan (default <code>/research</code> in the image). Mount research there.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Mount a named volume at <code>/app/.research-cache</code> (a bind mount must be owned by uid 1000) to keep the clone, saves and notes across restarts. Generate a token with <code>openssl rand -hex 32</code>.</p>
+<pre>docker run -p 3000:3000 \
+  -e SPACEHUB_TOKEN="$(spacehub auth token)" -e INSTANTS_SPACE=quirq/curie \
+  -e INSTANTS_ADMIN_TOKEN=change-me -e ANTHROPIC_API_KEY=sk-ant-... \
+  -v instants-cache:/app/.research-cache \
+  registry.xo.builders/instants-xo-tpbhrsi/app:latest</pre>
+<h3>Deploy on Vercel</h3>
+<p>Vercel has no disk and no background processes, so there the app is a view-only frontend over Spacehub: the public project in <code>INSTANTS_SPACE</code> is the database. Posts are read from the hub's raw file URLs (cached for <code>INSTANTS_REVALIDATE</code> seconds), slide images and videos redirect to the hub, and saving, notes, generating, videos and Space sync are hidden. New posts made on your Mac or in the Docker image reach the site once they sync to the project.</p>
+<p>Import the repo in Vercel (framework Next.js, the defaults in <code>vercel.json</code>) and set:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INSTANTS_SPACE</code></td>
+<td>yes</td>
+<td>Public Spacehub project to read, e.g. <code>quirq/curie</code>.</td>
+</tr>
+<tr>
+<td><code>INSTANTS_REVALIDATE</code></td>
+<td>no</td>
+<td>Seconds before posts are re-read from the hub (default <code>60</code>).</td>
+</tr>
+<tr>
+<td><code>INSTANTS_BRANCH</code></td>
+<td>no</td>
+<td>Branch to read (default <code>main</code>).</td>
+</tr>
+<tr>
+<td><code>SPACEHUB_HTTP</code></td>
+<td>no</td>
+<td>Hub web address (default <code>https://hub.quirq.dev</code>, or derived from <code>SPACEHUB_SERVER</code>).</td>
+</tr>
+<tr>
+<td><code>INSTANTS_STORE</code></td>
+<td>no</td>
+<td><code>hub</code> or <code>local</code>. Hub mode turns on by itself when <code>VERCEL</code> is set.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The project must be public: the hub ignores tokens on raw file URLs. <code>SPACEHUB_TOKEN</code>, <code>INSTANTS_ADMIN_TOKEN</code> and <code>ANTHROPIC_API_KEY</code> are not used on Vercel. Try hub mode locally with <code>INSTANTS_STORE=hub npm run build &amp;&amp; INSTANTS_STORE=hub npx next start</code>.</p>
+<h3>How generation auth works</h3>
+<ul>
+<li>If <code>ANTHROPIC_API_KEY</code> is set, the engine calls the Anthropic API directly from the server.</li>
+<li>Otherwise it shells out to the local <code>claude</code> CLI, using whatever login that CLI has (<code>claude /login</code>).</li>
+</ul>
+<p>All model calls happen server-side. The browser never sees a key. Under <code>next dev</code> the API routes accept loopback requests; a production server (including the Docker image) never trusts the Host header and only accepts, when <code>INSTANTS_ADMIN_TOKEN</code> is set, same-origin requests carrying the httpOnly cookie that <code>/unlock</code> sets.</p>
+<h3>Stack</h3>
+<p>Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui primitives. No database: everything lives in <code>.research-cache/</code>.</p>

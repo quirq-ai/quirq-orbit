@@ -1,0 +1,242 @@
+<p>Verified, shareable research outcomes from quirq.</p>
+<p>This repository is not a scratchpad. Notes, drafts, raw dumps and half-checked
+claims stay out. Everything committed here has been checked against its
+sources and is safe to share outside the team.</p>
+<h3>How it is organised</h3>
+<p>Every research topic is a top-level folder named with a short slug, created
+from <code>_template/</code> and holding the same parts:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>README.md</code></td>
+<td>What the topic is, the research and verified findings so far, and current status/progress.</td>
+</tr>
+<tr>
+<td><code>GOAL.md</code></td>
+<td>The purpose of the research, the research action, and which output formats were requested.</td>
+</tr>
+<tr>
+<td><code>AGENTS.md</code></td>
+<td>Instructions for an agent: what to research, how to verify it, and how to put results into <code>output/</code>.</td>
+</tr>
+<tr>
+<td><code>package.json</code></td>
+<td>The topic's <code>build</code> and <code>dev</code> scripts, which decide how it is presented (see below).</td>
+</tr>
+<tr>
+<td><code>output/</code></td>
+<td>Published results, split by format: <code>onepager/</code>, <code>slide/</code>, <code>report/</code>, <code>app/</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Create a topic from the repo root with <code>scripts/new-topic.sh &lt;slug&gt;</code>, for
+example <code>scripts/new-topic.sh agent-evals</code>. The script copies <code>_template/</code> to
+<code>&lt;slug&gt;/</code> and fills in the topic name and today's date. It refuses to
+overwrite a folder that already exists. <a href="https://github.com/quirq-ai/research/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a> has the full
+workflow.</p>
+<h3>Output formats</h3>
+<p>Results go only into the format or formats the requester asked for, as ticked
+under "Requested outputs" in the topic's <code>GOAL.md</code>. An empty format folder
+(holding only its README) is normal.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>output/onepager/</code></td>
+<td>Single-page summary: the question, the answer, key findings, sources.</td>
+</tr>
+<tr>
+<td><code>output/slide/</code></td>
+<td>Slide deck for presenting the findings.</td>
+</tr>
+<tr>
+<td><code>output/report/</code></td>
+<td>Long-form write-up: method, findings, limitations, references.</td>
+</tr>
+<tr>
+<td><code>output/app/</code></td>
+<td>Runnable demo, each in its own folder with a README covering setup and run instructions.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>What "verified" means here</h3>
+<ul>
+<li>Every claim traces to a source someone else can check: a link, paper,
+dataset, or a reproducible experiment included in the topic.</li>
+<li>Numbers are either reproduced or quoted with their source.</li>
+<li>Limitations and open questions are stated, not hidden.</li>
+</ul>
+<h3>What "shareable" means here</h3>
+<ul>
+<li>No secrets, credentials, personal data, customer data, or internal-only
+material.</li>
+<li>Third-party content is linked or quoted within its licence.</li>
+</ul>
+<h3>Topic status</h3>
+<p>Each topic README carries one status:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proposed</td>
+<td>Folder created; goal being defined.</td>
+</tr>
+<tr>
+<td>Researching</td>
+<td>Goal agreed; research under way.</td>
+</tr>
+<tr>
+<td>Published</td>
+<td>At least one requested output is published and verified.</td>
+</tr>
+<tr>
+<td>Paused</td>
+<td>Work stopped for now; findings so far still stand.</td>
+</tr>
+<tr>
+<td>Archived</td>
+<td>No further work planned.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Repository layout</h3>
+<pre><code>.
+├── README.md             # this file
+├── AGENTS.md             # how agents create and work a topic
+├── LICENSE
+├── package.json          # npm workspaces: every topic, every app, packages/*
+├── turbo.json            # Turborepo tasks: build and dev
+├── vercel.json           # Vercel settings for the hub site
+├── _template/            # copied for every new topic
+│   ├── README.md
+│   ├── GOAL.md
+│   ├── AGENTS.md
+│   ├── package.json      # the topic's build and dev scripts
+│   └── output/{onepager,slide,report,app}/
+├── packages/
+│   ├── present/          # default presentation: Markdown to a static site
+│   └── theme/            # shared quirq look: CSS tokens, base styles, HTML partials
+├── scripts/
+│   ├── new-topic.sh      # creates a topic folder from _template/
+│   ├── check.mjs         # checks every topic follows the rules (npm run check)
+│   ├── topics-table.mjs  # writes the Topics table below (npm run topics)
+│   ├── lib/topics.mjs    # finds topics and reads their READMEs, for the scripts
+│   └── build-hub.mjs     # puts every topic into one site with an index page
+├── .github/workflows/    # CI: npm run check and npm run build on every PR
+└── &lt;topic&gt;/              # one folder per topic
+</code></pre>
+<h3>How topics are presented and deployed</h3>
+<p>The repo is a <a href="https://turborepo.dev" target="_blank" rel="noopener">Turborepo</a> monorepo using npm
+workspaces, deployed as one site: a hub page listing every topic, with each
+topic at <code>/&lt;topic&gt;/</code>.</p>
+<p>Each topic folder is a workspace with its own <code>package.json</code>, and each topic
+decides how it presents its findings. The only contract is:</p>
+<ul>
+<li><code>npm run build</code> in the topic writes a static site to <code>&lt;topic&gt;/dist/</code>, using
+relative links so it works under <code>/&lt;topic&gt;/</code>.</li>
+<li><code>npm run dev</code> in the topic serves it locally.</li>
+</ul>
+<p>A new topic starts with the default presentation, <code>@research/present</code>, which
+renders the topic's <code>README.md</code>, <code>GOAL.md</code> and the files in
+<code>output/onepager/</code>, <code>output/slide/</code> and <code>output/report/</code> into a small site
+(Markdown becomes HTML pages, other files such as PDFs are copied as-is). It
+also adds each app in <code>output/app/&lt;name&gt;/</code> that has a built <code>dist/</code>, at
+<code>output/app/&lt;name&gt;/</code> with an App link in the menu. For example <code>infra</code> lists
+<code>infra-map</code> (a Vite app, and its own workspace) as a devDependency, so
+Turborepo builds the app first and the hub shows the map next to the reports.</p>
+<p>To present a topic another way, change the scripts in its <code>package.json</code>.
+Any tool works as long as the build ends with a static site in <code>dist/</code>.</p>
+<p>The root build runs every topic's build, then <code>scripts/build-hub.mjs</code> copies
+each <code>&lt;topic&gt;/dist/</code> to <code>dist/&lt;topic&gt;/</code> and writes <code>dist/index.html</code>, which
+lists the topics with the title, first paragraph and status from each topic's
+<code>README.md</code>.</p>
+<h4>Run locally</h4>
+<p>Node.js 22.13 or newer. From the repo root:</p>
+<pre>npm install                          # installs every workspace
+npm run check                        # checks every topic follows the repo rules
+npm run build                        # builds the whole hub into dist/
+npm run dev                          # builds it and serves it on http://localhost:3000
+npx turbo run build --filter=infra   # builds one topic and what it depends on
+cd infra &amp;&amp; npm run dev              # works on one topic on its own</pre>
+<h4>Deploy on Vercel</h4>
+<p>One Vercel project serves the whole hub:</p>
+<ol>
+<li>In Vercel, add a new project and import <code>quirq-ai/research</code>.</li>
+<li>Leave <strong>Root Directory</strong> as the repo root (<code>./</code>).</li>
+<li>Set <strong>Application Preset</strong> to <strong>Other</strong>.</li>
+<li>Deploy. The root <code>vercel.json</code> sets the install command (<code>npm ci</code>), build
+command (<code>npm run build</code>) and output directory (<code>dist</code>), so leave Build
+and Output Settings as they are.</li>
+</ol>
+<p>A new topic appears on the hub after its next push, with no Vercel changes.</p>
+<h3>Topics</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Status</th>
+<th>Summary</th>
+<th>Outputs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/claude/" target="_blank" rel="noopener">claude</a></td>
+<td>Published</td>
+<td>suraj's research on Claude Code: what a session is made of, where its state lives, how a host drives it, and what an agent OS should own around it.</td>
+<td>onepager, report, app</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/design/" target="_blank" rel="noopener">design</a></td>
+<td>Published</td>
+<td>Which design system, principles and tokens quirq should use across its product UI, docs and research hub.</td>
+<td>onepager, report</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/engineering/" target="_blank" rel="noopener">engineering</a></td>
+<td>Researching</td>
+<td>How quirq engineers build software: how the repos fit together, how changes are tested and reviewed, and how AI agents take part.</td>
+<td>None yet</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/infra/" target="_blank" rel="noopener">infra</a></td>
+<td>Published</td>
+<td>How quirq infra (qq), the build, test and land system behind the quirq repos, fits together across its 13 public repos.</td>
+<td>onepager, slide, report, app</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/marketing/" target="_blank" rel="noopener">marketing</a></td>
+<td>Proposed</td>
+<td>One sentence: what this topic is about.</td>
+<td>None yet</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/research/blob/main/product/" target="_blank" rel="noopener">product</a></td>
+<td>Proposed</td>
+<td>One sentence: what this topic is about.</td>
+<td>None yet</td>
+</tr>
+</tbody>
+</table></div>
+<p>This table is generated from each topic's README (status, first
+paragraph and published formats). Run <code>npm run topics</code> after
+you create a topic or change its README; <code>npm run check</code> fails while the
+table is out of date.</p>
+<h3>Licence</h3>
+<p>MIT. See <a href="https://github.com/quirq-ai/research/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

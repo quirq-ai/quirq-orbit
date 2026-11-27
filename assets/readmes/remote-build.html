@@ -1,0 +1,103 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo is
+where actions run and how their results are reused: the executor interface and the action cache.</p>
+<p><strong>Chromium counterpart:</strong> goma, then reclient, then Siso with RBE over REAPI, which works with any
+REAPI backend. As there, an action is a command, an input root digest and a platform, and its
+result is a set of output digests and an exit code. Actions are shaped like REAPI's <code>Action</code> and
+<code>ActionResult</code> (<a href="https://github.com/bazelbuild/remote-apis" target="_blank" rel="noopener">bazelbuild/remote-apis</a>); v0 needs no
+gRPC.</p>
+<h3>v0 scope</h3>
+<ul>
+<li>One executor interface with a <code>backend</code> field: <code>local</code> and <code>github</code> (a GitHub Actions runner)
+now, so <code>launchpad</code> (quirq's own cloud) and Buildbarn slot in later.</li>
+<li>A local action cache keyed by the action digest. Actions that are not hermetic are marked
+<code>cacheable = false</code> and never cached. Any remote-to-local fallback is typed and counted, never
+silent.</li>
+</ul>
+<p>Out of scope for v0: a shared bazel-remote cache (v1), Buildbarn remote execution and autoscaled
+workers (v2).</p>
+<h3>How it works (v0)</h3>
+<ul>
+<li>
+<p>An <strong>action</strong> is a recipes <code>Action</code> (<code>qqrecipes.contract</code>, pinned by commit): a command, an
+input root digest, environment, declared outputs and platform properties. <code>Action.digest()</code> is
+its key. A request (<code>qq-exec-request/1</code>) adds the repo-relative files of the input root and,
+for remote backends, the git repository and commit to fetch them from.</p>
+</li>
+<li>
+<p>An <strong>executor</strong> runs one request and returns an <code>ActionResult</code>: exit code and the digest of
+every declared output. <code>qqrbe.executor.load(backend)</code> imports <code>qqrbe.backends.&lt;backend&gt;</code>;
+nothing registers backends, so <code>launchpad</code> or <code>buildbarn</code> is one new module.</p>
+</li>
+<li>
+<p>Before running, every executor checks that the files it sees hash to the input root digest and
+that it is the action's platform. A failure there is a typed error (<code>qqrbe.errors</code>), never a
+silent run on the wrong inputs. A non-zero exit code is a result, not an error.</p>
+</li>
+<li>
+<p>Backends: <code>local</code> runs the action here through recipes' runner. <code>github</code> dispatches
+<code>.github/workflows/execute.yml</code>, a worker that checks out the commit, verifies the input root,
+runs the action with the local executor and sends back the result and outputs as an artifact.
+v0 uses git as the input store. TODO(expert): a REAPI CAS (v1 shared cache).
+The <code>github</code> backend needs a token with <code>actions: write</code> (QQ_GITHUB_TOKEN or GITHUB_TOKEN).</p>
+</li>
+<li>
+<p>CI's <code>cross-backend</code> job runs <code>qqrbe selftest</code> on both backends and <code>qqrbe compare</code> fails it
+unless both give the same action digest and the same output digests (V0-RBE-01 done-when).</p>
+</li>
+<li>
+<p><strong>Action cache</strong> (<code>qqrbe.cache</code>, V0-RBE-02): <code>exec</code> and <code>selftest</code> look the action digest up in
+<code>&lt;repo&gt;/.qq/cache</code> first. A hit restores the outputs, log and JUnit and says <code>cache: hit</code>; a miss
+runs and stores the result if it succeeded. Actions marked <code>cacheable = false</code> (or run on an
+ambient toolchain) always run and say <code>cache: uncacheable</code>. <code>--no-cache</code> turns it off.</p>
+</li>
+<li>
+<p><strong>Fallback</strong> (<code>--fallback local</code>): if the backend cannot run the action (<code>backend-unavailable</code>,
+<code>remote-execution-failed</code>), it runs locally instead. Every fallback prints a <code>FALLBACK</code> line,
+is marked in the result, and is counted by backend pair and reason in <code>.qq/cache/stats.json</code>.
+Wrong inputs, a wrong platform or a bad request never fall back: they would fail anywhere.</p>
+</li>
+<li>
+<p>CI shows both: a second run of the selftest must be a cache hit, and a run on <code>github</code> with no
+token must fall back and be counted (<code>qqrbe stats</code>).</p>
+</li>
+</ul>
+<pre>qqrbe backends                                   # local, github, ...
+qqrbe selftest --backend local                   # a small deterministic action
+qqrbe exec --request req.json --backend github   # run a qq-exec-request/1
+qqrbe compare local.json github.json             # same action, same output digests?
+qqrbe selftest --backend github --fallback local # fall back if GitHub cannot run it, counted
+qqrbe stats                                      # cache hits/misses, fallbacks by reason</pre>
+<p>Actions are planned by the adapters in <a href="https://github.com/quirq-ai/recipes" target="_blank" rel="noopener">quirq-ai/recipes</a>.
+Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-RBE-01</td>
+<td>Executor interface (<code>local</code>, <code>github</code>)</td>
+<td>#2, #3</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-RBE-02</td>
+<td>Local action cache and fallback counters</td>
+<td>#4</td>
+<td>merged</td>
+</tr>
+</tbody>
+</table></div>
+<p>Nothing outside this repo calls it yet: <code>qq build</code>, <code>qq test</code> and <code>qqrecipes execute</code> run actions
+on the machine they run on, and CI runs them on its own runners.</p>
+<h3>Working here</h3>
+<p>Read <code>AGENTS.md</code>. Run the tests with <code>pip install -e ".[test]" &amp;&amp; pytest</code>.</p>
+<h3>Licence</h3>
+<p>Apache License 2.0; see <code>LICENSE</code>.</p>

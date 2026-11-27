@@ -1,0 +1,99 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo builds
+the toolchains every qq build uses, publishes them, pins them by digest, and promotes them from
+staging by reviewed pull request.</p>
+<p><strong>Chromium counterpart:</strong> CIPD packages built by 3pp, and clang's upload-then-promote flow. A
+toolchain is built once by CI, stored by content digest, and a build refers to it only by that
+digest, never by a moving version.</p>
+<h3>How it works (v0)</h3>
+<ul>
+<li><strong>Transport.</strong> OCI artifacts on <code>ghcr.io/quirq-ai/toolchains/&lt;name&gt;</code>, addressed by digest (plan
+decision D6). v0 has no containers, so each artifact is one tarball layer that <code>qq sync</code>
+unpacks without a container runtime. Linux x86_64 only.</li>
+<li><strong>Staging.</strong> A change to a toolchain's spec is built in CI and pushed with a <code>staging-…</code> tag.</li>
+<li><strong>Promotion.</strong> A reviewed PR moves the staged digest into <code>promoted.toml</code>. That file is what the
+roller reads to update pins in product repos.</li>
+</ul>
+<h3>Adding or moving a toolchain</h3>
+<ol>
+<li>Edit <code>toolchains/&lt;name&gt;/toolchain.toml</code> (version, source URL and sha256) and its <code>build.sh</code>.
+Open a PR. The <code>build</code> check builds it, smoke-tests it, and builds its pinned consumer repos.</li>
+<li>When it lands, <code>build</code> on <code>main</code> stages it as <code>ghcr.io/quirq-ai/toolchains/&lt;name&gt;:staging-…</code>
+and prints a ready-made record in the run summary. Staging happens before the consumer builds
+run, so a staged digest is promotable only if that run's <code>consumers</code> job is green.</li>
+<li>Promote it in its own PR: <code>python tools/qqtc.py promote &lt;name&gt; --record staged.json</code>, which
+rewrites <code>promoted.toml</code> in its one canonical form (hand edits are refused). That PR may change
+only <code>promoted.toml</code> and <code>README.md</code>. The <code>promotion-gate</code> check pulls the digest, checks that
+a staging build of a commit on <code>main</code> produced exactly those bytes, and re-runs the smoke tests
+and consumer builds on them. It runs main's <code>qqtc</code>, <code>gate.py</code> and specs, never the PR's (the
+workflow file that picks them is the PR's, see the caveat under "Needs suraj"), and judges
+what will actually merge. On every PR it also refuses workflows that could fake it:
+another check named <code>promotion-gate</code>, changed gate triggers, or a token that can write checks
+or statuses (<code>tools/gate.py</code>). A reviewer approves; then it merges through the merge queue,
+where the gate runs again. The check is advisory until the toolchains ruleset requires it.
+gate #25 adds it to that ruleset; it becomes required when gate's settings are next applied,
+which has not happened yet.</li>
+<li>The toolchain roller (quirq-ai/rollers, V0-ROL-01) reads <code>promoted.toml</code> and opens pin-update
+PRs in product repos.</li>
+</ol>
+<p>Plan and all v0 items: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-TCH-01</td>
+<td>Python toolchain (CPython 3.14.8)</td>
+<td>#2, #5</td>
+<td>Built by CI, promoted by digest; xo-space's suite passes on it in CI (1713 collected; an independent run on 3.14.8 got 1705 passed, 8 skipped) and its route parity check passes. xo-space's <code>infra/repo.toml</code> now pins this digest.</td>
+</tr>
+<tr>
+<td>V0-TCH-02</td>
+<td>Node.js 24.21.0 LTS and pnpm 11.28.2</td>
+<td>#3, #5</td>
+<td>Built and promoted by digest; innernet installs, typechecks and builds with it in CI, and innernet's <code>infra/repo.toml</code> now pins this digest.</td>
+</tr>
+<tr>
+<td>V0-TCH-03</td>
+<td>Staging and promotion</td>
+<td>#4, #5</td>
+<td>Promotion PR #5 passed the promotion gate and landed. gate's apply at 6610664 turned on this repo's ruleset and merge queue (V0-ORG-03); no promotion has landed through the queue since, and <code>promotion-gate</code> is not a required check yet.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Promoted pins live in <a href="https://github.com/quirq-ai/toolchains/blob/main/promoted.toml" target="_blank" rel="noopener"><code>promoted.toml</code></a>; the roller (V0-ROL-01) reads them from there.</p>
+<p><strong>Needs suraj (org admin):</strong></p>
+<ul>
+<li><code>ghcr.io/quirq-ai/toolchains/python</code> and <code>ghcr.io/quirq-ai/toolchains/node</code> are public: an
+anonymous pull of each promoted digest works. New packages start private, so every new toolchain
+added here adds a package that must be made public in its settings, under "Change visibility",
+before <code>qq sync</code>, recipes and product-repo CI can pull it.</li>
+<li>The toolchains ruleset from quirq-ai/gate (V0-ORG-03) is applied as of gate 6610664: required
+code-owner review (stale approvals are dismissed on each push), <code>ci</code> required, and a merge queue
+that merges one PR per group. gate #25 adds <code>promotion-gate</code> to the required checks; it takes
+effect at the next run of gate's apply. On GitHub Free there is no org-required workflow, so the
+<code>promotion-gate</code> workflow file comes from the PR: a PR that edits it can change which tools
+judge it, and only your code-owner review of <code>.github/</code> stops that, so read any change to it
+line by line. The workflow rules in <code>gate.py</code> cannot close every way to fake the check: anyone
+with write access can push a branch, with no PR and no review, whose workflow has
+<code>checks: write</code> and posts a green <code>promotion-gate</code> check on any commit, or post a status with a
+token. So the roller must re-verify each pin rather than trust <code>promoted.toml</code> alone.</li>
+</ul>
+<h3>Changing when the gate runs</h3>
+<p>The gate runs on PRs into <code>main</code>, in the merge queue and on push to <code>main</code>. Those triggers are
+pinned in <code>GATE_TRIGGERS</code> in <code>tools/gate.py</code>, and the gate judges every PR with main's copy of it.
+So a PR that changes the triggers in <code>.github/workflows/promotion-gate.yml</code> and <code>GATE_TRIGGERS</code>
+together is refused on the PR and again in the queue, by design. Once <code>promotion-gate</code> is a
+required check, such a PR cannot merge through the gate. It needs an owner, outside the gate:
+suraj takes <code>promotion-gate</code> out of the toolchains ruleset's required checks, merges the PR, and
+puts the check back. Every other PR, including changes to the gate's code that keep its
+triggers, goes through the gate as usual.</p>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/toolchains/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks with <code>python -m pytest</code>.</p>

@@ -1,0 +1,36 @@
+<p>A small public dashboard of activity across our <strong>public</strong> GitHub repositories:
+commits per week, a live event feed, and a card per repo (language, CI status,
+open PRs/issues, latest release, 12-week commit sparkline).</p>
+<h3>How it works</h3>
+<ul>
+<li>Next.js (App Router, Cache Components) on Vercel.</li>
+<li>All GitHub calls run on the server (<code>src/lib/github.ts</code>, marked <code>server-only</code>).
+The token is read from <code>GITHUB_TOKEN</code> and never reaches the browser.</li>
+<li>Only <code>privacy: PUBLIC</code> repos are queried, and results are filtered again by
+<code>isPrivate</code> and owner. Feed events are kept only if their repo is in that public set,
+and repo pages 404 for anything outside it.</li>
+<li>Data is cached and refreshed in the background every 5 minutes.</li>
+</ul>
+<h3>Configuration</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GITHUB_TOKEN</code></td>
+<td>Fine-grained PAT, <strong>Public repositories (read-only)</strong></td>
+</tr>
+<tr>
+<td><code>GITHUB_OWNERS</code></td>
+<td>Comma-separated users/orgs to include (default <code>quirq-ai,quirq-gates</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Develop</h3>
+<pre>cp .env.example .env.local   # add a token
+npm install
+npm run dev</pre>

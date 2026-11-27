@@ -1,0 +1,457 @@
+<a href="https://xo.builders" target="_blank" rel="noopener">
+  
+    
+    
+    <img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/xo-logo-light.svg" alt="XO" loading="lazy">
+  
+</a>
+<h2>XO Space</h2>
+<p><strong>Build, observe and measure agentic work, locally, across every coding agent you use.</strong></p>
+<p>One environment for Claude Code, Codex, OpenClaw, Hermes and Antigravity.<br>
+Every project, session, todo and cost on one screen. Measure output, not just tokens.</p>
+<p>Quick start · Capabilities · Supported agents · How it works · <a href="https://docs.quirq.dev" target="_blank" rel="noopener">Docs</a> · Contributing</p>
+<p><a href="https://www.python.org/" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python" loading="lazy"></a>
+<a href="https://fastapi.tiangolo.com/" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/FastAPI-0.141%2B-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI" loading="lazy"></a>
+<a href="https://github.com/quirq-ai/xo-space/blob/main/LICENSE" target="_blank" rel="noopener"><img src="https://img.shields.io/github/license/quirq-ai/xo-space?style=flat-square" alt="License" loading="lazy"></a>
+<a href="https://github.com/quirq-ai/xo-space/issues" target="_blank" rel="noopener"><img src="https://img.shields.io/github/issues/quirq-ai/xo-space?style=flat-square" alt="Issues" loading="lazy"></a>
+<a href="https://github.com/quirq-ai/xo-space/labels/good%20first%20issue" target="_blank" rel="noopener"><img src="https://img.shields.io/github/issues/quirq-ai/xo-space/good%20first%20issue?style=flat-square&amp;label=good%20first%20issues" alt="Good first issues" loading="lazy"></a></p>
+<a href="https://github.com/quirq-ai/xo-space/blob/main/brand/screenshots/dashboard-todos.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/screenshots/dashboard-todos.png" alt="XO Space dashboard: every project as a node, todos orbiting the selected one" loading="lazy"></a>
+<hr>
+<h3>The problem</h3>
+<p>Every coding agent keeps its own session store, its own auth, its own todo list and its own idea of what a "project" is. Use two of them on the same codebase and you have two histories, two usage bills and no single place to look. And none of them tell you what was actually <em>delivered</em>, only what was spent.</p>
+<h3>What XO Space is</h3>
+<p>XO Space is the <strong>environment layer</strong> between your machine and your agents: a local server (this repository) that sits in front of the agents you already have installed, plus a browser UI that reads what they do. It does not run models or replace the agents. It stitches them together and measures what they deliver.</p>
+<pre>curl -fsSL https://quirq.ai/install | sh      # then open http://localhost:5002/space/</pre>
+<hr>
+<h3>Key capabilities</h3>
+<ul>
+<li>👀 <strong>Watch your agents work</strong>, see which agent is active in which project right now, what it touched, and what it's been doing session by session.</li>
+<li>🗂️ <strong>Your whole workspace in one place</strong>, every folder is a project. Files, git history, todos and live agent activity, browsable from one screen instead of five terminals.</li>
+<li>✅ <strong>Manage the work, not the chat</strong>, todos per project, kept up to date as agents check them off, so you always know what's done and what's next.</li>
+<li>🔌 <strong>One API for every agent</strong>, <code>POST /api/chat/prompt</code>, read an SSE stream. Claude Code chats on storm, XO's session engine; OpenClaw, Hermes and the others through their own chat path; switch with one environment variable.</li>
+<li>📡 <strong>Sessions across runtimes</strong>, session telemetry from every agent that exposes it, side by side, whichever one you're chatting with.</li>
+<li>📈 <strong>Know what it cost</strong>, tokens, cost, per-model and per-tool breakdowns in one shape regardless of runtime.</li>
+<li>🕰️ <strong>See how it grew</strong>, every project's git history in parallel lanes; open any commit as a 3D city map where building height is the churn.</li>
+<li>🛰️ <strong>Local-first</strong>, binds to <code>localhost</code>, needs no account, sends nothing until you sign in. What leaves your machine.</li>
+</ul>
+<div class="qtable"><table>
+  <tbody><tr>
+    <td><a href="https://github.com/quirq-ai/xo-space/blob/main/brand/screenshots/files-list.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/screenshots/files-list.png" alt="Projects List: one row per project with counts, activity and descriptions" loading="lazy"></a><br><sub><b>Projects</b>, every project in the workspace, which agent is active in it, last activity.</sub></td>
+    <td><a href="https://github.com/quirq-ai/xo-space/blob/main/brand/screenshots/timeline.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/screenshots/timeline.png" alt="Timeline: commit history in parallel lanes" loading="lazy"></a><br><sub><b>Timeline</b>, every project's git history in parallel lanes; click a commit for the 3D snapshot.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/quirq-ai/xo-space/blob/main/brand/screenshots/files-drawer.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/screenshots/files-drawer.png" alt="Project drawer: file explorer beside todos, sessions and events" loading="lazy"></a><br><sub><b>Project drawer</b>, browse a project beside its todos, open sessions and recent events.</sub></td>
+    <td><a href="https://github.com/quirq-ai/xo-space/blob/main/brand/screenshots/setup.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/xo-space/main/brand/screenshots/setup.png" alt="Setup tab: storage roots, runtime, credentials and update state" loading="lazy"></a><br><sub><b>Setup</b>, storage roots, active agent, credentials, self-update.</sub></td>
+  </tr>
+</tbody></table></div>
+<hr>
+<h3>Quick start</h3>
+<h4>Install in Codex</h4>
+<p>Add this repository to Codex once:</p>
+<pre>codex plugin marketplace add quirq-ai/xo-space</pre>
+<p>Open <strong>Plugins → Quirq → XO Space → Install</strong>, start a new task, and say
+<strong>“Open XO Space.”</strong> Codex installs and starts Space in <code>~/xo-workspace</code> (or the
+workspace you name), selects the Codex backend, and opens the UI. Existing
+installations keep their settings. The server runs while its task/terminal stays
+alive. <a href="https://github.com/quirq-ai/xo-space/blob/main/plugins/quirq/README.md" target="_blank" rel="noopener">Plugin setup, prerequisites and development-branch installs</a>.</p>
+<h4>One-click setup</h4>
+<p>Run this from the directory you want as your workspace, each sub-folder becomes a project:</p>
+<pre>curl -fsSL https://quirq.ai/install | sh</pre>
+<p>Then open <strong><a href="http://localhost:5002/space/" target="_blank" rel="noopener">http://localhost:5002/space/</a></strong>.</p>
+<p>What the installer does: clones this repo into <code>./xo-space</code>, creates a Python 3.12 venv with <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a>, and starts the server in the foreground. Ctrl-C stops it; re-running the command updates and restarts it. Machine-local state and logs live in <code>./.quirq/</code>, next to your projects, including <code>logs/quirq.log</code> for server output and <code>inbox/activity/commands.log</code> for every external command Quirq runs in that state root, and the whole install is one folder you can move or delete. For a clean removal that keeps your project folders, run <code>./xo-space/uninstall.sh</code>, see <a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md#uninstalling" target="_blank" rel="noopener">INSTALLATION.md</a>.</p>
+<p><strong>Requirements:</strong> <code>git</code>. Everything else is optional and only disables its own feature, <code>node</code>/<code>npm</code> for installing an agent CLI, <code>gh</code> for project backup, <code>rclone</code> for Drive/OneDrive. Windows runs under WSL (<a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md#windows" target="_blank" rel="noopener">details</a>).</p>
+<h4>Manual setup</h4>
+<p>Same result, step by step, if you'd rather see what you're running, or you're going to hack on it:</p>
+<pre># 1. Clone
+git clone https://github.com/quirq-ai/xo-space &amp;&amp; cd xo-space
+# 2. First run, detects the checkout, uses it in place, writes ./.env with
+#    working defaults, and starts the server. Ctrl-C when you've seen it.
+./install.sh
+# 3. Configure, edit .env to taste (see the table below), then run again
+./install.sh</pre>
+<p><code>.env</code> is written once and never rewritten, so your edits survive updates. Values exported in your shell win over the file (<code>PORT=8080 ./install.sh</code>). The keys it contains:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AGENT_NAME</code></td>
+<td>Which agent handles chat: <code>claude_code</code>, <code>codex</code>, <code>openclaw</code>, <code>hermes</code>, <code>antigravity</code>, <code>grokbot</code></td>
+<td><code>claude_code</code></td>
+</tr>
+<tr>
+<td><code>XO_PROJECTS_ROOT</code></td>
+<td>Your workspace, the directory whose sub-folders are projects</td>
+<td>the directory you ran the installer from</td>
+</tr>
+<tr>
+<td><code>QUIRQ_STATE_ROOT</code></td>
+<td>Machine-local state: runtime config, saved credentials, watcher cursors, logs. Must not be inside a project</td>
+<td><code>./.quirq</code> in that directory</td>
+</tr>
+<tr>
+<td><code>AI_WORKSPACE_ROOT</code></td>
+<td>Shown as the AI workspace path in the runtime configuration report; nothing is started there</td>
+<td>same as <code>XO_PROJECTS_ROOT</code></td>
+</tr>
+<tr>
+<td><code>HOST</code>, <code>PORT</code></td>
+<td>Where the server listens. Loopback only by default. The API has no login, so <code>HOST=0.0.0.0</code> lets every device on your network read and change your files: use it only on a network you trust</td>
+<td><code>127.0.0.1</code>, <code>5002</code></td>
+</tr>
+<tr>
+<td><code>STAGE</code></td>
+<td><code>local</code> finds agent CLIs with <code>which</code>; <code>beta</code> assumes the hosted container layout</td>
+<td><code>local</code></td>
+</tr>
+<tr>
+<td><code>QUIRQ_WATCHER_SOURCE_MODE</code></td>
+<td><code>all</code>, the watcher reads every installed agent's session store, so Sessions shows all of them; <code>active</code>, only <code>AGENT_NAME</code>'s</td>
+<td><code>all</code></td>
+</tr>
+<tr>
+<td><code>QUIRQ_SKIP_BOOT_INSTALL</code></td>
+<td><code>1</code>, install nothing beyond <code>requirements.txt</code>. Set <code>0</code> to let boot hooks <code>apt</code>/<code>nvm</code>/<code>npm -g</code> the agent CLI for you</td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>UVICORN_RELOAD</code></td>
+<td>Auto-restart on code changes, turn on when hacking on the server</td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code>, <code>CLAUDE_CODE_OAUTH_TOKEN</code></td>
+<td>Optional. The agent CLI normally uses its own login; set one only if it isn't already authenticated. Leave commented rather than blank</td>
+<td>unset</td>
+</tr>
+<tr>
+<td><code>XO_API_KEY</code></td>
+<td>Links this install to your XO account</td>
+<td>unset</td>
+</tr>
+</tbody>
+</table></div>
+<p>Agent-specific knobs (<code>CLAUDE_CLI_PATH</code>, <code>CODEX_CLI_PATH</code>, the OpenClaw/Hermes gateway URLs and tokens, Google Drive/Vercel connector settings) are documented in <a href="https://github.com/quirq-ai/xo-space/blob/main/.env.example" target="_blank" rel="noopener"><code>.env.example</code></a>. Roots, the state directory and watcher timing: <a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md#configuration" target="_blank" rel="noopener">INSTALLATION.md</a>.</p>
+<p><strong>First run.</strong> Space opens on <strong>Projects → Overview</strong> (<code>#/projects/overview</code>). Projects contains <strong>Overview | Data | Timeline | Manage</strong>, with <strong>List | Graph | Tree</strong> views inside Data. Choose <strong>Data → List</strong> (<code>#/projects/data/list</code>) to browse the folders in your workspace, or open <strong>Manage → Add project</strong> to clone a Git repository. Before the first chat, check Setup → Intelligence layer for the agent connection and activity collection settings. Full walkthrough: <a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md" target="_blank" rel="noopener">INSTALLATION.md</a>.</p>
+<p><strong>Finding your projects.</strong> Search by name, folder ID or description, filter to <strong>Live</strong> sessions or <strong>Pinned</strong> projects, and sort by recent activity, name, indexed files or creation date. Pin projects from Manage; pins stay in this browser and appear in Data’s Pinned filter. Open a Data List row to browse files; folder position and filters survive navigation, and <strong>Refresh files</strong> rereads the current folder. File counts describe the visible file index, with <code>+</code> when scanning was incomplete; a project missing from the index shows <strong>Not indexed</strong>. <strong>Graph root</strong>, available throughout Projects, opens the graph at the chosen node.</p>
+<p><strong>Managing projects.</strong> <strong>Projects → Manage</strong> (<code>#/projects/manage</code>) contains cloning, inline sharing and guarded local removal. Each card groups View activity, Share, Pin, Copy GitHub URL and Remove in its header. Expand a card to view its metadata and GitHub Issues and copy recorded values. To share, enter the destination Space ID in the card without leaving Manage. Removing a project deletes only this Space's local copy: sharing is not checked or changed, and the relay does not clone it back until you add it again. The old <code>#/setup/projects</code> address opens Manage.</p>
+<p><strong>Inbox and activity.</strong> Inbox contains <strong>Items | Connections | Jobs | Activity | Sharing activity | Sharing</strong>. Activity shows project events; select a project for its todos and current sessions. Sharing activity shows the relay's recent events, while Sharing manages repository access and synchronization.</p>
+<p><strong>Setup.</strong> Workspace and Intelligence layer guide initial configuration. Workspace shows the Space ID, workspace owner, XO account and verified GitHub identity. Connectors, Secrets, Commands and Server provide app connections, environment keys, saved commands/results and server controls. Direct URLs are <code>#/setup/workspace</code>, <code>#/setup/intelligence</code>, <code>#/setup/connectors</code>, <code>#/setup/secrets</code>, <code>#/setup/commands</code> and <code>#/setup/server</code>. Opening Setup starts at Workspace; existing <code>#/setup</code>, <code>#/connectors</code> and <code>#/secrets</code> links remain compatible.</p>
+<p>Search Setup to find a setting and jump to its control. Connectors includes GitHub, MagicPath, Vercel, Google Drive and OneDrive alongside account apps, with connection status and the existing sign-in and management actions.</p>
+<h4>XO Managed Cloud</h4>
+<p>Don't want to run a server? <a href="https://app.xo.builders/" target="_blank" rel="noopener">app.xo.builders</a> gives you the same XO Space, already running, in an XO-provisioned workspace, one click, nothing to install, your agents and projects ready when you open the tab.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th></th>
+<th>Self-hosted</th>
+<th>XO Managed Cloud</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runs on</td>
+<td>your machine</td>
+<td>XO-provisioned workspace</td>
+</tr>
+<tr>
+<td>Setup</td>
+<td>one command, you keep it running</td>
+<td>none, always on</td>
+</tr>
+<tr>
+<td>Account &amp; sign-in</td>
+<td>optional</td>
+<td>built in</td>
+</tr>
+<tr>
+<td>Updates</td>
+<td>re-run the installer</td>
+<td>automatic</td>
+</tr>
+<tr>
+<td>Sharing projects with a team</td>
+<td>via GitHub backup</td>
+<td>built in</td>
+</tr>
+<tr>
+<td>Code</td>
+<td>this repo</td>
+<td>this repo</td>
+</tr>
+</tbody>
+</table></div>
+<hr>
+<h3>Supported agents</h3>
+<p>Pick the active agent with <code>AGENT_NAME</code> (or from the Setup tab). Agents that expose session telemetry show up in the Agents tab even when they are not the active one.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th><code>AGENT_NAME</code></th>
+<th>Chat</th>
+<th>Sessions</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Claude Code</strong></td>
+<td><code>claude_code</code></td>
+<td>✅</td>
+<td>✅</td>
+<td><code>claude</code> CLI subprocess; the default when nothing is configured</td>
+</tr>
+<tr>
+<td><strong>Codex</strong></td>
+<td><code>codex</code></td>
+<td>✅</td>
+<td>✅</td>
+<td><code>codex exec</code> subprocess</td>
+</tr>
+<tr>
+<td><strong>OpenClaw</strong></td>
+<td><code>openclaw</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>HTTP gateway on <code>:18789</code></td>
+</tr>
+<tr>
+<td><strong>Hermes</strong></td>
+<td><code>hermes</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>HTTP gateway on <code>:8642</code>, one per profile</td>
+</tr>
+<tr>
+<td><strong>Antigravity</strong></td>
+<td><code>antigravity</code></td>
+<td>✅</td>
+<td>✅</td>
+<td><code>agy</code> CLI subprocess + Google OAuth</td>
+</tr>
+<tr>
+<td><strong>Grok Bot</strong></td>
+<td><code>grokbot</code></td>
+<td>partial</td>
+<td>partial</td>
+<td>External host gateway on <code>:1340</code>; replies arrive after polling. Text history comes from the gateway for Space-indexed chats. No Space project/MCP/model selection, usage, status integrations, Agents management, telemetry or prompt suggestions. See Grok Bot limits.</td>
+</tr>
+<tr>
+<td><strong>Cursor</strong></td>
+<td>, </td>
+<td>, </td>
+<td>✅</td>
+<td>Read-only: sessions appear in telemetry, cannot run a turn</td>
+</tr>
+<tr>
+<td><strong>Your own</strong></td>
+<td><code>&lt;name&gt;</code></td>
+<td>✅</td>
+<td>✅</td>
+<td>Drop <code>config/agents/&lt;name&gt;/</code> + <code>services/cowork_agent/adapters/&lt;name&gt;/</code>, auto-discovered, no core edits. Guide: <a href="https://github.com/quirq-ai/xo-space/blob/main/DEVELOPING.md" target="_blank" rel="noopener">DEVELOPING.md §4</a></td>
+</tr>
+</tbody>
+</table></div>
+<h4>Grok Bot limits</h4>
+<p>Set <code>AGENT_NAME=grokbot</code> and run the host separately. The gateway defaults to
+<code>http://127.0.0.1:1340</code> (<code>GROKBOT_GATEWAY_URL</code>, alias <code>SAND_GATEWAY_URL</code>);
+chat needs <code>SAND_GATEWAY_TOKEN</code> or the token in <code>sand-data/gateway.json</code>.
+The <a href="https://github.com/adam91holt/grokbot-sdk" target="_blank" rel="noopener">community SDK</a> documents the
+gateway protocol; it is <strong>not a host installer</strong>. Space supplies no host
+installer, <code>setup.sh</code> or <code>troubleshoot.py</code>, and invokes no Grok Bot binary.</p>
+<h4>Where to run this</h4>
+<p><strong>Supported:</strong> install Space on the Grok Bot cloud computer. The default
+<code>127.0.0.1:1340</code> address refers to that computer, not your laptop.
+<strong>Advanced:</strong> run Space elsewhere with a private SSH or Tailscale tunnel to
+port 1340 and set <code>GROKBOT_GATEWAY_URL</code> to the tunnel endpoint. The gateway has
+no public or tailnet route by default. <strong>Never expose port 1340 publicly:</strong>
+the token gives full control of the host.</p>
+<p>Space saves each chat's UUID, host seat, title and times in its session index
+before sending the prompt. Follow-ups reuse that seat. The Sessions tab lists
+Space-indexed chats without per-row gateway calls; host-created seats are not
+imported. Reopening a chat reads <strong>text-only</strong> history through
+<code>getAgentTranscript</code>, paging older entries with <code>getAgentTranscriptPage</code> and
+<code>beforeSeq</code> when the returned window starts later. No sand-data mount is
+needed if the URL and token are configured. Tool calls/results are absent
+from the observed host transcript. The amount of older history retained by
+the host remains unverified; pagination can only return what the host retains.
+Gateway history errors (including an unreachable host or missing token) are
+logged without the token and return empty history. Setup stores secrets in
+Space's <code>~/.quirq/secrets/secrets.env</code> (or <code>QUIRQ_SECRETS_FILE</code>), outside host data.
+Setup checks the active gateway's unauthenticated health endpoint, with a
+five-second deadline. No local CLI or host data folder is required for that
+check; a reachable service does not verify credentials or activity collection.</p>
+<p>New chats get separate retained host seats by default; the reviewer verified
+that separate seats run in parallel. These <code>xo-space-*</code>
+seats stay for follow-ups and must be deleted <strong>on the host</strong> when no longer
+needed; deleting a Space session does not delete its host seat. Standalone
+one-shot calls without a Space session delete their newly created seat after
+completion or failure. <code>GROKBOT_DEFAULT_AGENT_ID</code> explicitly opts into one
+<strong>shared host conversation</strong>: separate Space chats then share context and
+history. Leave it unset for isolation; avoid concurrent prompts on a shared
+seat, including prompts sent outside Space.</p>
+<p>Replies arrive as a single text block after polling (up to 600 seconds), with
+an initial waiting status and SSE heartbeats, but no live tokens, tool or
+thinking events. Completion requires both an idle seat (including tasks and
+subagents) and replies matched by <code>clientNonce</code> → <code>requestId</code>. Acceptance
+<code>not-found</code> does not block completion. Multiple reply messages are joined.
+The prompt matching this turn's nonce must have a valid <code>requestId</code>; unrelated
+entries without correlation keys are ignored. Cancellation and timeout
+attempt <code>interruptAgentRun</code>; if the host is unavailable or does not support
+it, stop the turn on the host.</p>
+<p>Project selection/<code>agent_id</code>, Space connections and per-user MCP configuration,
+and per-prompt <code>model</code> selection are not forwarded; the host controls its
+workspace, tools and model. Usage accounting, model/provider/channel status,
+Agents management, session telemetry/presence/visualizer integration and
+prompt suggestions are out of scope (their capabilities return empty/501).
+The Chat tab is hidden in the current build, and the visible Agents, Inbox and
+Projects activity views do not show Grok Bot chats yet. A follow-up needs
+gateway-backed session telemetry, activity and presence; importing chats
+created outside Space also needs a policy. Session <code>updatedAt</code> currently
+advances only when Space sends a prompt.
+Regression tests use the reviewer's observed live-host message shapes with a
+mocked HTTP transport. The reviewer validated new chats, follow-ups, isolated
+seats and reopening four-message history through Space's HTTP/SSE endpoints
+on a live Grok Bot computer at <code>d57c2dc</code>. Long-chat retention and pagination
+remain unverified on a live host.</p>
+<hr>
+<h3>How it works</h3>
+<pre><code>   Space UI (/space/)  ·  XO desktop app  ·  any HTTP/SSE client
+                                 │
+                                 ▼
+                 ┌───────────────────────────────┐
+                 │   xo-space server (this repo)  │
+                 │   /api/chat  /api/sessions     │
+                 │   /api/files /api/usage  …     │
+                 │                                │
+                 │   adapters/&lt;agent&gt;/  ← one per │
+                 │   agent, loaded by AGENT_NAME  │
+                 └───────────────┬───────────────┘
+                                 ▼
+          ~/.claude/  ~/.codex/  ~/.openclaw/  ~/.hermes/  …
+                 (each agent's own on-disk state)
+</code></pre>
+<p><strong>A chat turn on storm</strong> (an agent with a storm runtime: Claude Code today):</p>
+<pre># 1. Send the prompt, returns at once; the engine runs the turn
+curl -sX POST http://localhost:5002/api/chat/prompt \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Refactor the auth flow", "client_id":"9b1c..."}'
+# → {"session_id":"cse_4f2a...", "turn_id":null}
+# 2. Read the session's events as server-sent events
+curl -N http://localhost:5002/api/chat/sessions/cse_4f2a.../stream</pre>
+<p>Send the next message with <code>"session_id"</code>; <code>POST /api/chat/abort {"session_id": …}</code>
+stops the turn. <strong>An agent without a runtime</strong> (OpenClaw, Hermes, Grok Bot) keeps
+its two calls: the prompt answers <code>{"stream_id", "session_id"}</code>, and
+<code>GET /api/chat/stream/{stream_id}</code> streams <code>text-delta</code> … <code>done</code>. Codex and
+Antigravity chat again when their storm runtimes land.</p>
+<p>The router never knows which agent it is talking to. Each agent lives in <code>services/cowork_agent/adapters/&lt;name&gt;/</code> behind one interface (<a href="https://github.com/quirq-ai/xo-space/blob/main/services/cowork_agent/adapters/base.py" target="_blank" rel="noopener"><code>BaseAgentAdapter</code></a>), and a background watcher tails each agent's on-disk session files to build the workspace views. Architecture in depth: <a href="https://github.com/quirq-ai/xo-space/blob/main/DEVELOPING.md" target="_blank" rel="noopener">DEVELOPING.md</a>. Full API reference: <code>/docs</code> on a running server.</p>
+<p><strong>Projects.</strong> Every direct sub-folder of your workspace root is a project. The watcher writes a <code>.xo/</code> folder inside each one with <code>project.json</code>, <code>todos.json</code>, <code>stats.json</code>, a timeline and session <em>metadata</em>, ids, counts, timings, cost. Chat content stays in the agent's own store and is never copied there, so a project folder is always safe to push or share.</p>
+<hr>
+<h3>What leaves your machine</h3>
+<p>Nothing, by default. A self-hosted install binds to loopback, needs no account, and sends no usage data. Session traces and telemetry stay in <code>.quirq/</code> and the agents' own stores.</p>
+<p>If you set <code>XO_API_KEY</code> (or sign in from the app) to link the install to your XO account, a <strong>daily usage summary</strong> is sent: token counts, estimated cost, and message/session/tool-call counts per model. Normal metric fields exclude prompts, responses and file contents; diagnostic error notes can include source filenames and raw error details. Leave the key unset to stay signed out.</p>
+<p>To see what your install decided: open <strong>Setup → Intelligence layer → Usage reporting</strong> (<code>/space/#/setup/intelligence</code>), the server's own decisions are in <code>&lt;state root&gt;/logs/quirq.log</code> (<code>grep usage_sync ~/.quirq/logs/quirq.log</code> on the default install), and every external command Quirq runs is recorded in <code>&lt;state root&gt;/inbox/activity/commands.log</code>. The installer prints the log pointers on every run.</p>
+<p>If <code>XO_API_KEY</code> is set <strong>and</strong> <code>XO_SPACE_ID</code> names this workspace, project sharing is active: once a minute XO Space asks xo-swarm-api which repos are shared with this workspace, and after you push a shared repo it reports the new commit hashes and your workspace id. Hashes only, never diffs, messages or file contents. Without both values set, the relay makes no network calls at all. In the other direction, a repo someone shares with your workspace is cloned into your XO root automatically (one at a time, never over an existing folder, nothing from it is run); set <code>PROJECT_SHARING_AUTO_CLONE=false</code> to keep the clone step manual.</p>
+<p>Saved jobs in Setup (scheduled or manual) run locally with the server’s environment. Their definitions and results stay under <code>&lt;quirq state&gt;/scheduler/</code>, and their per-command output logs under <code>&lt;quirq state&gt;/logs/scheduler/</code>. The executor also writes its redacted shared <code>&lt;quirq state&gt;/inbox/activity/commands.log</code> unless disabled; at 5 MB it moves to <code>&lt;quirq state&gt;/inbox/activity/archive/commands.&lt;stamp&gt;.log</code> (the first start after an update moves an earlier release's <code>logs/commands.log</code> there too) and nothing deletes it, so that history grows until you remove it. Set <code>QUIRQ_COMMAND_LOG_ARCHIVE=false</code> to keep only the previous log instead, as <code>&lt;quirq state&gt;/inbox/activity/commands.log.1</code>, so the log never takes more than about 10 MB. The Jobs card adds no reporting. A command you choose can make its own network requests.</p>
+<p>Everything else on the network happens because you asked for it: <code>git fetch</code> when Setup checks for updates, GitHub when you back a project up, connectors you connect, and whatever the agent runtimes themselves do.</p>
+<hr>
+<h3>Documentation</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Where</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://docs.quirq.dev/docs/space" target="_blank" rel="noopener">Space documentation</a></td>
+<td>Full guides: <a href="https://docs.quirq.dev/docs/space/install-space" target="_blank" rel="noopener">installation</a>, <a href="https://docs.quirq.dev/docs/space/space-walk" target="_blank" rel="noopener">UI walkthrough</a>, <a href="https://docs.quirq.dev/docs/space/observability" target="_blank" rel="noopener">Observability</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md" target="_blank" rel="noopener">INSTALLATION.md</a></td>
+<td>Prerequisites, first run, local data layout, configuration, Windows</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/DEVELOPING.md" target="_blank" rel="noopener">DEVELOPING.md</a></td>
+<td>Architecture, adding an agent, validation</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a></td>
+<td>Dev setup, ground rules, PR process</td>
+</tr>
+<tr>
+<td><strong>In-app Wiki</strong>, <code>/space/#/wiki</code></td>
+<td>Open Wiki at the top right for a compact offline overview; detailed online guides open in a new tab</td>
+</tr>
+<tr>
+<td><strong><code>/docs</code></strong> on a running server</td>
+<td>API reference (changes with the active agent)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/space_ui/README.md" target="_blank" rel="noopener">space_ui/README.md</a></td>
+<td>The browser UI</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/plugins/quirq/README.md" target="_blank" rel="noopener">plugins/quirq/README.md</a></td>
+<td>Codex plugin: click install and open Space</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/plugin/README.md" target="_blank" rel="noopener">plugin/README.md</a></td>
+<td>Claude Code plugin</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/xo-space/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a></td>
+<td>Rules for AI agents editing this repo</td>
+</tr>
+</tbody>
+</table></div>
+<hr>
+<h3>FAQ</h3>
+<details>
+<summary><b>Does it replace my coding agent?</b></summary>
+<p>No. It drives the agents you already have installed and reads what they leave on disk. You still need the agent's own CLI and account.</p>
+</details>
+<details>
+<summary><b>Does it see my conversations?</b></summary>
+<p>It reads them from the agent's store to show you sessions, but never copies them into a project folder and never uploads them. See What leaves your machine.</p>
+</details>
+<details>
+<summary><b>Does it run on Windows?</b></summary>
+<p>Under WSL. The watcher uses <code>fcntl</code> and the scripts are bash. See the <a href="https://github.com/quirq-ai/xo-space/blob/main/INSTALLATION.md#windows" target="_blank" rel="noopener">Windows notes</a>.</p>
+</details>
+<details>
+<summary><b>What is quirq?</b></summary>
+<p>The output meter, a unit of verified, owner-valued, delivered work, measured by comparing world state before and after instead of trusting self-reports. The <code>.quirq/</code> directory is its local state. <a href="https://docs.quirq.dev/docs/quirq" target="_blank" rel="noopener">Read more</a>.</p>
+</details>
+<details>
+<summary><b>Do I need an account?</b></summary>
+<p>Not to self-host, everything local works signed out. An account is what connects you to <a href="https://app.xo.builders/" target="_blank" rel="noopener">XO Managed Cloud</a>, or links a self-hosted install to it.</p>
+</details>
+<hr>
+<h3>Support</h3>
+<p>Need help? <a href="https://github.com/quirq-ai/xo-space/issues" target="_blank" rel="noopener">Open an issue</a>, bugs, questions and ideas all go there; say if you're not sure it's a bug. The in-app Wiki (<code>/space/#/wiki</code>) is a compact offline overview; <a href="https://docs.quirq.dev/docs/space" target="_blank" rel="noopener">Space documentation</a> contains the full guides. For security issues, don't post details, open an issue titled <em>"Security: request for a private channel"</em> and a maintainer will reply.</p>
+<hr>
+<h3>Contributing</h3>
+<p>We'd love your help. Found a bug 🐛, want a runtime that isn't here 🧩, or have an idea ✨?</p>
+<ul>
+<li><strong>Start with</strong> <a href="https://github.com/quirq-ai/xo-space/labels/good%20first%20issue" target="_blank" rel="noopener"><code>good first issue</code></a> or <a href="https://github.com/quirq-ai/xo-space/labels/help%20wanted" target="_blank" rel="noopener"><code>help wanted</code></a>.</li>
+<li><strong>Small fix?</strong> Just open the PR. <strong>Bigger change?</strong> Open an issue first so nobody duplicates the work.</li>
+<li><strong>Adding an agent</strong> is designed to be two folders and zero core edits, the best-paved path in the repo.</li>
+<li>Branch from and target <strong><code>main</code></strong>; that is what the installer ships. <code>development</code> is the maintainers' staging branch, not a PR target.</li>
+</ul>
+<p><a href="https://github.com/quirq-ai/xo-space/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> has the dev setup, the ground rules and the PR checklist. No CLA, contributions are MIT like the rest of the code.</p>
+<a href="https://github.com/quirq-ai/xo-space/graphs/contributors" target="_blank" rel="noopener">
+  <img src="https://contrib.rocks/image?repo=quirq-ai/xo-space&amp;max=100" alt="Contributors" loading="lazy">
+</a>
+<hr>
+<h3>License</h3>
+<p>Released under the <a href="https://github.com/quirq-ai/xo-space/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.</p>
+<hr>
+<p>Part of <a href="https://xo.builders" target="_blank" rel="noopener">XO</a> · Maintained at <a href="https://github.com/quirq-ai/xo-space" target="_blank" rel="noopener">quirq-ai/xo-space</a> · <a href="https://docs.quirq.dev" target="_blank" rel="noopener">Docs</a></p>

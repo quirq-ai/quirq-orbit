@@ -1,0 +1,170 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo
+decides what must pass before a change lands: the required checks, computed from
+<a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">infra-config</a> and each repo's manifest, and the merge
+queue that verifies the exact merge result before it reaches <code>main</code>.</p>
+<p><strong>Chromium counterpart:</strong> LUCI CV (Change Verifier) and <code>commit-queue.cfg</code>. As there, the gate is
+deterministic config, not judgment: no agent can override it, and every required check also runs
+on the merge result (GitHub <code>merge_group</code>), not only on the proposed change.</p>
+<h3>v0 scope</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-GAT-01</td>
+<td>Required checks computed from <code>gate.toml</code>, <code>pipelines.toml</code> and manifests</td>
+<td>V0-CFG-02</td>
+</tr>
+<tr>
+<td>V0-ORG-03</td>
+<td>Merge queue and rulesets as code, with an apply script suraj runs</td>
+<td>V0-GAT-01</td>
+</tr>
+<tr>
+<td>V0-GAT-02</td>
+<td>Agnosticism guard: no core file names a language, build tool or deploy target</td>
+<td>V0-GAT-01</td>
+</tr>
+<tr>
+<td>V0-GAT-03</td>
+<td>Verification-surface rule: tests, quarantine and <code>infra/</code> need a non-author owner</td>
+<td>V0-GAT-01, V0-ORG-02</td>
+</tr>
+<tr>
+<td>V0-GAT-04</td>
+<td>Gate timing (queue entry to verdict, p50 and p90 per repo) in scorecard v0</td>
+<td>V0-TST-02</td>
+</tr>
+</tbody>
+</table></div>
+<p>Out of scope for v0: result reuse, admission-bar enforcement and tree status (v1); cross-repo
+gating and a queue for Launchpad (v2).</p>
+<h3>How it works (V0-GAT-01)</h3>
+<ul>
+<li>Policy comes only from <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">infra-config</a>, read at the
+commit in <code>pins.toml</code> through infra-config's own <code>qqcfg</code> (<code>qqcfg validate</code> must pass first, or the
+gate refuses to compute anything). Manifests (<code>infra/repo.toml</code>) are read only through
+<a href="https://github.com/quirq-ai/sync" target="_blank" rel="noopener">sync</a> (<code>qqsync</code>), also by pinned commit.</li>
+<li><code>gate.toml [merge_queue] required = "blocking-builders"</code>: every builder in <code>pipelines.toml</code> with
+<code>blocking = true</code> for a repo is a required check, named after the builder.</li>
+<li>Each required check must run on the change and on the exact merge result (triggers <code>change</code> and
+<code>queue</code>, GitHub <code>pull_request</code> and <code>merge_group</code>). A blocking builder without <code>queue</code> is an error.</li>
+<li>A repo with no blocking builder is refused as ungated. With a manifest, every target's kind must
+be covered by a blocking builder, so no target lands unverified.</li>
+<li>Backend code sits in <code>qqgate/backends/&lt;backend&gt;.py</code>, picked by the <code>backend</code> field. <code>github</code>
+checks that infra-config generates a workflow whose job is each required check on both events,
+emits the ruleset's <code>required_status_checks</code> rule (checks must come from the GitHub Actions app),
+and reads a commit's check runs. <code>launchpad</code> is one new module.</li>
+<li>A verdict passes only when every required check reported <code>success</code>. Missing, running, skipped
+and neutral checks are refusals. Exit codes: 0 pass, 1 refused, 2 the gate could not decide,
+3 the repo is not in repos.toml (<code>required</code>, <code>rule</code> and <code>verdict</code>; with <code>--json</code>, stdout is <code>{"repo": ..., "onboarded": false}</code>).</li>
+</ul>
+<pre>qqgate required --config ../infra-config --repo xo-space [--manifest infra/repo.toml]
+qqgate rule     --config ../infra-config --repo xo-space          # ruleset rule JSON (V0-ORG-03 applies it)
+qqgate verdict  --config ../infra-config --repo xo-space --sha &lt;commit&gt;   # or --observed checks.json</pre>
+<p>Today: <code>xo-space</code> requires <code>xo-space-presubmit</code>, <code>innernet</code> requires <code>innernet-presubmit</code>, <code>website</code> requires <code>website-presubmit</code>.
+xo-space's hand-written <code>tests</code> check is not required: the generated presubmit runs everything it
+ran, and V0-ONB-01 deleted <code>tests.yml</code> (xo-space #217). <code>transitional_checks</code> in <code>settings/github.toml</code> can still add
+a hand-written check after the generated ones.</p>
+<p>"A red PR is refused" has two halves. CI here proves the gate's half: a red check on xo-space or innernet
+gives a refusal (website too). The live half needs the generated workflows delivered (xo-space #211, innernet
+#37, website #1), the rulesets applied (V0-ORG-03, suraj) and the manifests (V0-ONB-01/02). All three
+products have their workflows and <code>infra/repo.toml</code> on <code>main</code>. The repo rulesets are applied for
+xo-space and innernet; website's wait on the next settings run. No live refusal of a red PR is
+recorded yet.</p>
+<h3>Merge queue and rulesets (V0-ORG-03)</h3>
+<p><code>settings/github.toml</code> is the merge queue and rulesets as code, for all thirteen infra repos and
+the three product repos (xo-space, innernet, website). <code>qqgate settings plan</code> prints them, <code>verify</code> says which repos are safe to switch
+on today (every required check must run on <code>pull_request</code> and <code>merge_group</code> there), and <code>apply</code>
+creates or updates them by name for ready repos only. An org admin runs one command,
+<code>scripts/apply.sh</code>; see <a href="https://github.com/quirq-ai/gate/blob/main/docs/apply-settings.md" target="_blank" rel="noopener">docs/apply-settings.md</a>.</p>
+<p>A user org (the one-command setup, quirq-ai/setup) passes its own file with <code>--settings FILE</code>
+(from <a href="https://github.com/quirq-ai/gate/blob/main/templates/user-org-settings.toml" target="_blank" rel="noopener">templates/user-org-settings.toml</a>), <code>--config</code> its data-only
+<code>qq-config</code> checkout, <code>--infra-config</code> infra-config at <code>qq-config</code>'s <code>qq.toml</code> pin
+(<code>[infra-config] commit</code>) and, for <code>verify</code> and <code>apply</code>, <code>--config-commit</code>. Such a file gets only
+<code>qq-main</code> and <code>qq-reserved-tags</code>, never for quirq-ai, and <code>apply.sh</code> never passes these flags.
+<code>qqgate settings check --settings FILE</code> reads (GETs only) what already protects each of its repos.
+Run qqgate from a gate checkout installed with <code>pip install -e</code>, as <code>apply.sh</code> does: it reads
+<code>settings/</code> and <code>pins.toml</code> from that checkout.</p>
+<h3>Agnosticism guard (V0-GAT-02)</h3>
+<p><code>qqgate guard --repo &lt;core repo&gt; [ROOT]</code> fails if shipped code in a core repo (qq, sync, gate,
+test-pipelines, gardener, release; plan §5.1) names a language, build tool or deploy target. Python
+files are read with <code>ast</code> (identifiers, imports, strings) and <code>tokenize</code> (comments); other files are
+grepped. Tests, docs and CI are not core code. The terms and the reviewed per-file exceptions (for
+example qq's launcher, which starts qq's own Python) are in <code>guard/terms.toml</code>, a policy file;
+there is no inline pragma. Registered media types (<code>application/vnd.docker...</code>) are formats, not
+targets, and are skipped. Each core repo adds
+<code>qqgate guard --repo &lt;name&gt; .</code> to its presubmit (qq, test-pipelines, gardener and release do;
+sync does not yet). gate runs it in its own presubmit; this repo's <code>settings-drift</code> job sweeps the
+other five.</p>
+<h3>Gate timing (V0-GAT-04)</h3>
+<p>Scorecard v0 (test-pipelines) reports gate time per repo as p50 and p90 of queue entry to verdict,
+from each gate run's <code>Run.queued_at</code>. The merge_group payload carries no queue-entry time, so a gate
+job runs <code>quirq-ai/gate/timing@&lt;commit&gt;</code> before the result sink: it reads the PR from the queue ref,
+takes the newest <code>added_to_merge_queue</code> event on its timeline at or before the group was built, and
+exports <code>QQ_QUEUED_AT</code> (RFC 3339 UTC) for the sink. If the timeline cannot be read it exports nothing
+(the merge-group commit's time would understate the wait without anyone seeing it) and warns. It
+never fails the job, and it installs nothing: it runs gate's own source on whatever <code>python3</code> is
+first on PATH (3.11 or later; older warns and skips), isolated from site-packages, with the standard
+library only. The job's token needs <code>pull-requests: read</code> (and
+<code>contents: read</code>).</p>
+<p>Scorecard caveats for v0: with several PRs in one group, the group is timed from the tip PR's queue
+entry. Put the timing step and the sink only in the gate job that finishes last, so each gate run
+is one sample.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bootstrap</td>
+<td>#1</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-GAT-01</td>
+<td>#2</td>
+<td>merged; no live refusal recorded yet</td>
+</tr>
+<tr>
+<td>V0-ORG-03</td>
+<td>#3, #5, #9, #10, #13, #14, #15, #16, #17, #20, #23, #24, #25, #26, #28</td>
+<td>merged; suraj ran <code>scripts/apply.sh</code> (<a href="https://github.com/quirq-ai/gate/blob/main/docs/apply-settings.md" target="_blank" rel="noopener">docs/apply-settings.md</a>) at 6610664, which applied the repo rulesets. The settings merged since (#25 toolchains' <code>promotion-gate</code>, #26 the release executor bypass, #28 website) take effect only when the command runs at a later commit, and no such run is recorded. #24 <code>allow_auto_merge</code> was set by hand on 2026-10-04: it is on in every repo but xo-space and website, and the next run sets website. Org rulesets are all off: quirq-ai is on GitHub Free and suraj chose no org-wide rules; the Dependabot branch rules wait</td>
+</tr>
+<tr>
+<td>V0-GAT-02</td>
+<td>#4</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-GAT-03</td>
+<td></td>
+<td>waits on V0-ORG-02 (suraj's owners)</td>
+</tr>
+<tr>
+<td>V0-GAT-04</td>
+<td>#6</td>
+<td>merged; the sink reads QQ_QUEUED_AT (test-pipelines 1e3ddb1), and infra-config's generated gate builders run the timing step (infra-config #10, #20). The scorecard of 2026-10-07 shows gate time for xo-space (p50 2.1 min over 5 runs) and innernet (p50 0.9 min over 2 runs)</td>
+</tr>
+<tr>
+<td>not-onboarded exit 3 (for qq)</td>
+<td>#7</td>
+<td>merged</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Known conflict</h3>
+<p>suraj cannot approve PRs opened under his own account, so an owner-review rule needs a second
+human owner or a bot identity. TODO(suraj): pick one; the gate does not work around it.</p>
+<h3>License</h3>
+<p>Apache License 2.0; see <a href="https://github.com/quirq-ai/gate/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

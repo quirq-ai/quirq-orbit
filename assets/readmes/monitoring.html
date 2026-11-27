@@ -1,0 +1,242 @@
+<p>The quirq-ai monitoring dashboard: one page that says <strong>what changed across the org and what state
+everything is in</strong>, on a phone or a desktop. suraj's Vercel project serves it at
+<a href="https://monitoring.quirq.dev/" target="_blank" rel="noopener">monitoring.quirq.dev</a>.</p>
+<p>The dashboard is read-only. It reads the state the other repos already publish, shows it with the word
+(<code>green</code>, <code>red</code>, <code>held</code>, <code>pending</code>, <code>unknown</code>, <code>stale</code>) before the color, and links every value to
+the file or GitHub page it came from. It never merges, approves, comments or moves a ref. The one
+part that changes anything is the <strong>Settings</strong> editor below, and it does so only with your own <code>gh</code>
+login, only as pull requests (and, after a confirm step, org properties).</p>
+<p><a href="https://github.com/quirq-ai/monitoring/blob/main/docs/calendar-phone.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/monitoring/main/docs/calendar-phone.png" alt="Calendar on a phone, showing fixture data: the Blockers counts in one line, the last seven days with today first, then today&#x27;s changes by time" loading="lazy"></a></p>
+<p>(Fixture data from the test server, not the live org.)</p>
+<p>Every page at phone and desktop width, light and dark, is in the <code>screenshots</code> artifact of each
+CI run.</p>
+<h3>The pages</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Page</th>
+<th>The question it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Calendar</strong> (<code>/</code>)</td>
+<td>What changed, one day at a time. The last 7 days as a strip, today first, each with its count and a bar split by state; a day opens below (<code>?day=YYYY-MM-DD</code>), its changes by time, newest first (merged PRs, lkgr and channel moves, canary results, tree opened or closed, deploys, new failures, a writer whose last run failed), or by repo (<code>?view=repo</code>): one row per tracked repo with one dot per change, oldest left, opening into its entries. The repos with no change fold into one line. An alarm a newer event has cleared is marked "since cleared". One line on top carries the Blockers counts. Deploys and channel moves keep only their newest event, so an earlier day can show fewer of them than happened.</td>
+</tr>
+<tr>
+<td><strong>Blockers</strong> (<code>/blockers</code>, was <code>/waiting</code>)</td>
+<td>Three counts on top (waiting on you; red or held; unknown, stale or failing), then what waits on you (PRs where you are a requested reviewer or assignee, PRs you approved on an older head, held canaries, open <code>qq-failure</code> issues), then what else is broken right now: red or held in the last 24 hours and not cleared since (a closed tree, a failed canary or deploy, a new failure, a writer whose last run failed), without repeating what waits on you.</td>
+</tr>
+<tr>
+<td><strong>Board</strong> (<code>/board</code>)</td>
+<td>Every repo as a post-it note, one board per group, the notes that need a look first. On top, an overview indexes every repo by state; a tap jumps to its note. A note is tinted by its worst state (unknown is plain paper with a dashed edge); products and repos that need a look show CI on main, open PRs, last merge and for products also tree, lkgr, canary and deploy, the problems first. A green repo is a small note with its name. "needs a look" (<code>?show=look</code>) hides the rest.</td>
+</tr>
+<tr>
+<td><strong>Release</strong> (<code>/release</code>)</td>
+<td>Per product: lkgr and each channel, the last 14 canary days as a strip, the hold if one is on, and the latest canary report.</td>
+</tr>
+<tr>
+<td><strong>Health</strong> (<code>/health</code>)</td>
+<td>Whether each of the 9 scheduled writers ran on time, the scorecard, the gardener ledger, and every source this render read with its state.</td>
+</tr>
+<tr>
+<td><strong>Gardener</strong> (<code>/gardener</code>)</td>
+<td>Is main green in the repos the gardener watches, and is the gardener working? Per watched repo (from the gardener's own status index, so website is not on it): the tree, its builders, uncovered commits, and each red range with its suspects by sha (never a commit title), its failure type (build, test or infra) and failed steps from the gardener's <code>groups/groups.json</code>, or unknown when that file has no matching entry. Then whether the tree-status workflow runs on time and at its 5-minute pace, when each tree opened and closed (the last 100 tree-status commits), and why it only reports: the App (unknown: public data cannot show it), the ledger branch, <code>auto_land_repos</code> and the caps from infra-config <code>auto_revert.toml</code> at the gardener's pinned commit. Read-only.</td>
+</tr>
+<tr>
+<td><strong>Repo</strong> (<code>/repos/&lt;name&gt;</code>)</td>
+<td>One repo's Board row (CI, last merge; for a product also tree, lkgr, canary and deploy), its open PRs, the checks on its head, and for a product its tree builders, its canary strip and its perf metrics.</td>
+</tr>
+<tr>
+<td><strong>Settings</strong> (<code>/settings</code>, the gear in the header)</td>
+<td>Edit what the infra is set up with: the gates (gate <code>settings/github.toml</code>, infra-config <code>gate.toml</code>, gate <code>guard/terms.toml</code>), the pins (<code>pins.toml</code> in gate, gardener, release, installer and test-pipelines, rollers <code>infra-config.commit</code>), the policies (every infra-config <code>config/*.toml</code>), the owners (org roles, repo owners and rotations in <code>org.toml</code>, each repo's <code>.github/CODEOWNERS</code>) and the org's custom properties per repo. On/off values are switches. Each product's <code>infra/repo.toml</code> is only linked, since its header says to read and edit it only through qqsync. Left out on purpose: toolchains <code>promoted.toml</code> ("written by <code>qqtc promote</code> … do not edit by hand") and <code>toolchains.toml</code> (qqtc's own registry and backend). See The settings editor.</td>
+</tr>
+<tr>
+<td><strong>Snapshot</strong> (<code>/api/snapshot</code>)</td>
+<td>The same state as JSON (<code>qq-monitoring-snapshot/1</code>), for agents. <code>?since=7d</code> widens the window.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every tile shows the state first, then the detail, then where it came from and how old the data
+says it is. Every link that leaves the dashboard (GitHub, Vercel) opens in a new tab; the page
+links inside it stay in this one. A source that cannot be read shows <code>unknown</code> with the reason; a writer that has not run
+inside its window shows <code>stale</code>, and so does every tile built from the files that writer keeps (the
+tree, lkgr and canary tiles are only as current as the gardener and release jobs). A known fact
+with no health in it ("nothing merged in 7 days") is plain text with no badge. When the GitHub API
+as a whole is out (no token, rate limit, rejected token), one banner says so and the API tiles
+read <code>unknown</code>. A count whose sources were not all read is a floor ("3+") or "?", never a green
+zero. Nothing missing is ever shown as green.</p>
+<p><strong>How old is what you see?</strong> Calendar and Blockers say "data as of" the oldest read behind that page's own
+sources (the hourly org repo list does not count), or "No data could be read" when none answered.
+Each source is cached for 2 to 60 minutes (the windows are in <a href="https://github.com/quirq-ai/monitoring/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>); after a
+quiet night the first view is served from that cache while it refreshes, so a Board or Release
+tile read more than twice its window ago is marked <code>stale</code> rather than shown as current, and the
+counts and the Calendar and Blockers lists say "stale: read 50 min ago" when a read behind them is
+that old. Raw files add up to 5 minutes on top of that, and the PR search index a minute or two.</p>
+<h3>Run it</h3>
+<p>Node 20.9 or later (CI runs 24) and pnpm 11.28.2 (<code>corepack enable</code> installs the pinned one).</p>
+<pre>pnpm install --frozen-lockfile
+pnpm dev                      # http://localhost:3000, state-branch tiles work with no token</pre>
+<p>Add a token to make the GitHub API tiles (PRs, checks, deploys, writer runs, issues) work:</p>
+<pre>cp .env.example .env.local    # then put a read-only token in GITHUB_TOKEN</pre>
+<p>The token is a classic personal access token with <strong>no scopes</strong> (see Deploy for the exact
+settings and why not a fine-grained one). Without one those tiles read <code>unknown</code> under a "GitHub
+token not set" banner, and everything read from the state branches still works.
+<code>MONITORING_ORG</code> (default <code>quirq-ai</code>) is the org it reads; <code>MONITORING_OWNER</code> (default
+<code>sharmasuraj0123</code>) is whose "waiting on you" it is.</p>
+<p>Check a change before pushing (CI runs the same):</p>
+<pre>pnpm lint &amp;&amp; pnpm typecheck &amp;&amp; pnpm test &amp;&amp; pnpm build &amp;&amp; pnpm e2e
+pnpm live                     # every source once against the real branches, one line each</pre>
+<p><code>pnpm test</code> and <code>pnpm e2e</code> never touch the network: they read captured and synthetic files through
+a small fixture server (<code>tests/fixtures/</code>), so a Playwright run at 390 and 1280 px, light and dark,
+is the same every time. The screenshots land in <code>test-results/screenshots/</code>, and CI uploads them.</p>
+<h3>The settings editor</h3>
+<p><code>/settings</code> lists every value in those files with the comment written next to it, grouped by
+section (<code>[[repo]] xo-space</code>, <code>[policy]</code>), with a search box. Change what you want, then <strong>Review</strong>:
+the editor reads every file again (on the deployed site that read may be up to a minute old; the
+script checks the live file before it writes), makes the change line by line (comments and layout stay as they
+are, and the edited file must parse to the old one with only your values changed), and shows each
+pull request as a diff. One pull request per repo, on a new <code>settings-editor/&lt;repo&gt;-&lt;time&gt;</code> branch,
+never a push to <code>main</code>, so that repo's checks, CODEOWNERS, approvals and merge queue decide whether
+it lands. The review names the code owners CODEOWNERS assigns the paths to; the project waits for
+their review before merging (its own rule, except where gate's settings set <code>code_owner_review</code>,
+today toolchains, and GitHub requires it once applied). Values that <code>qqcfg generate</code> reads
+(toolchain pins, kind commands, generated builders, pool runners) and the kind, pool and repo
+names they refer to are read-only here, since changing them means regenerating <code>generated/</code> and
+workflows in a checkout (and <code>qqcfg deliver</code> for product repos). Merging is not taking effect:
+the tools read infra-config at a commit they pin, so a policy change reaches each of them when its
+pin moves, and a gate settings change reaches GitHub only when an org admin runs gate's settings
+apply. Each card and pull request says which. Org custom properties have no file: they change on GitHub at once, so the review asks you to
+tick a box first.</p>
+<p>Every change is made with <strong>your own GitHub login through <a href="https://cli.github.com" target="_blank" rel="noopener">gh</a></strong>. Nothing
+signs in to this site and no token is kept. Two ways:</p>
+<ul>
+<li><strong>On the deployed site</strong>, the review gives you a script, <code>settings-change.sh</code>. Run it with
+<code>bash settings-change.sh</code>: it uses only gh (macOS bash 3.2 is fine), ignores any token in the
+environment, checks that each file it edits is still the version on <code>main</code> the page read, and
+each property still its old value (and stops, writing nothing, if not), shows what it will do and waits for you to type <code>yes</code>.</li>
+<li><strong>On your machine</strong>, <code>pnpm editor</code> in a checkout of this repo builds the site and serves it at
+<code>127.0.0.1:3020</code>. It checks gh is signed in (and runs <code>gh auth login</code> for you if not), then
+prints a link to <code>/settings</code>. From that page, <strong>Open pull requests</strong> does the same steps through
+your gh directly. The link carries a key for that run in its <code>#fragment</code>; writes are refused
+without it, and from any address but 127.0.0.1. <code>pnpm editor --port N</code> picks another port.</li>
+</ul>
+<p>Signing in with GitHub on the deployed site itself would need a GitHub OAuth App, which only the
+org owner can register; it is not set up.</p>
+<h3>Where the data comes from</h3>
+<p>Only public data, from the repos that own it. Nothing is restated here.</p>
+<ul>
+<li><strong>State branches</strong>: <code>release-state</code> in release (channels, lkgr and channel pointers, canary runs,
+holds, daily reports), <code>tree-status</code> in gardener, <code>results</code> in test-pipelines (scorecard,
+failure records), <code>perf-data</code> in perf. Read from raw.githubusercontent.com, which can be up to 5
+minutes behind. The daily canary report is Markdown, rendered as text and tables, never as HTML.</li>
+<li><strong>Config on main</strong>: infra-config <code>config/repos.toml</code> (the products) and <code>config/channels.toml</code>
+(channel order and cadence), gate <code>settings/github.toml</code> (every repo behind the gate). This repo's
+<code>config/repos.json</code> adds only the repos neither names. Any public repo none of them knows shows
+under "Not in any registry".</li>
+<li><strong>The GitHub API</strong>, with the token: PRs and reviews (one org-wide search, not a call per repo),
+check runs, deployments, the writers' workflow runs, <code>qq-failure</code> and <code>canary-report</code> issues, the
+org repo list.</li>
+</ul>
+<p>The gardener <code>ledger</code> branch does not exist yet, so its tile reads <code>unknown: ledger not started</code>
+until the gardener App lands. The one failure record on <code>results</code> today is a planted demo; it is
+shown with a label and never counted.</p>
+<p>Every path, schema, cache window and freshness rule is in <a href="https://github.com/quirq-ai/monitoring/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>, which is the
+guide for the agents that build this. A PR that changes a source updates both files.</p>
+<h3>Repos it covers</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Repos</th>
+<th>Also shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Products</td>
+<td><code>xo-space</code>, <code>innernet</code>, <code>website</code> (from infra-config)</td>
+<td>tree status, lkgr, canary, production deploy, perf (website is not in the canary yet, and gardener and perf publish nothing for it, so only its deploy carries data: its tree cell is unknown and its perf section says no metrics are recorded)</td>
+</tr>
+<tr>
+<td>qq infra</td>
+<td>every non-product repo in gate <code>settings/github.toml</code>: <code>infra-config</code>, <code>gate</code>, <code>test-pipelines</code>, <code>gardener</code>, <code>release</code>, <code>perf</code>, <code>rollers</code>, <code>toolchains</code>, <code>qq</code>, <code>sync</code>, <code>recipes</code>, <code>remote-build</code>, <code>installer</code></td>
+<td>whether their scheduled writers ran on time (Health)</td>
+</tr>
+<tr>
+<td>Apps in progress</td>
+<td><code>euler</code>, <code>galileo</code>, <code>instants</code>, <code>quitter</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Knowledge</td>
+<td><code>research</code>, <code>wiki</code>, <code>docs</code>, <code>marketing</code>, <code>.github</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Other</td>
+<td><code>monitoring</code>, <code>setup</code>, <code>agent-skills</code>, <code>xo-cowork-api</code>, <code>environment</code>, <code>quirq_ai</code>, <code>quirqy</code> (<code>setup</code> and <code>agent-skills</code> are grouped here by this repo only; whether they go behind the gate is a separate decision)</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Deploy</h3>
+<p>Vercel's GitHub app builds <code>main</code> into the production deployment and every PR into a preview (both
+show up in the repo's deployments and on the PR). The project needs one environment variable:</p>
+<ol>
+<li>Create a classic personal access token at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener">https://github.com/settings/tokens/new</a>: note
+<code>monitoring.quirq.dev read-only</code>, expiration 90 days, <strong>no scopes ticked</strong>. Every call the
+dashboard makes is a public read; the token only buys the 5,000-an-hour limit. A classic token
+rather than a fine-grained one because GitHub documents the Checks API as a gap of fine-grained
+tokens, and the Board reads <code>commits/&lt;branch&gt;/check-runs</code>. (Observed, cause not established: on
+2026-10-07 a fine-grained token limited to "Public repositories" was refused with 403 on the
+writers' Actions runs endpoints while the rest answered. Health now shows GitHub's own message
+next to such a 403; read it before drawing a conclusion.)</li>
+<li>In Vercel, Settings &gt; Environment Variables, add it as <code>GITHUB_TOKEN</code>, marked <strong>Sensitive</strong>, for
+<strong>Production and Preview</strong>.</li>
+<li><strong>Redeploy</strong> (a variable change does not rebuild by itself), then open Health: the GitHub API
+card should read "answering, with a token", and nothing on the page should read "GitHub API
+refused". The API card alone is not the check: it goes unknown only when every GitHub read
+fails, so it stays green while the writers' runs or the check runs are refused.</li>
+</ol>
+<p>Rotate the token before it expires: an expired one shows a "GitHub token rejected" banner and
+breaks nothing else. <code>MONITORING_OWNER</code> and <code>MONITORING_ORG</code> can be set the same way.</p>
+<h4>Shown inside the website</h4>
+<p>The quirq.dev website may show the dashboard in an iframe; no other site may. Every response sends
+<code>Content-Security-Policy: frame-ancestors 'self' https://quirq.dev https://www.quirq.dev</code>
+(<code>config/framing.ts</code>, set in <code>next.config.ts</code>) and no <code>X-Frame-Options</code>. The local settings editor
+(<code>pnpm editor</code>) sends <code>frame-ancestors 'none'</code> instead, so no page frames it. The website and the
+dashboard are the same site (quirq.dev), so the theme cookie works inside the frame; without one the
+frame follows the viewer's light or dark setting. Page links move the frame; links to GitHub and
+Vercel open a new tab, so a sandboxed frame needs <code>allow-popups</code>, and <code>allow-same-origin</code> or it
+has no cookies. The settings page's Copy button needs <code>allow="clipboard-write"</code>:</p>
+<pre>&lt;iframe src="https://monitoring.quirq.dev/" title="quirq monitoring" loading="lazy"
+        allow="clipboard-write" style="border:0;width:100%;height:100%"&gt;&lt;/iframe&gt;</pre>
+<p>To let another site frame it, add its exact <code>https://</code> origin to <code>config/framing.ts</code>; never a
+wildcard or a preview host.</p>
+<h3>What is not built</h3>
+<ul>
+<li>Search, history charts, gate drift, push alerts, PostHog signals, a GitHub App in place of the
+token (v1, not started).</li>
+<li>Anything else that writes: filing alert issues, approving, landing or releasing a hold from the
+dashboard (v2, waits for its own decision). The settings editor only opens pull requests and
+sets org properties, as you.</li>
+<li>Sign-in with GitHub on the deployed site (needs an OAuth App), a fork when you cannot push a
+branch to the repo, editing multi-line values and inline tables (shown with a link to the line on
+GitHub), and multi-select properties.</li>
+<li>The dev and stable channels show "nothing promoted yet" until release promotes to them.</li>
+<li>A secondary rate limit (a 403 GitHub sometimes marks with a <code>retry-after</code> header) is shown with
+GitHub's own words but not backed off from, and the API card does not turn amber when only some
+reads are refused.</li>
+</ul>
+<h3>How it is built</h3>
+<p>Next.js 16 (App Router, server components), TypeScript strict, Tailwind 4 and shadcn/ui (Card,
+Alert, Table, Collapsible, Skeleton, Button; for the settings editor also Input, Textarea,
+Switch, Checkbox, Label and Native Select), zod for every file read, react-markdown for the
+report, Vitest and Playwright. The look is the Vercel one suraj asked for on 2026-10-07: the
+quirq wordmark from innernet, a near-monochrome palette (white and black surfaces, neutral text,
+color only for the six states), Geist Sans for text and Geist Mono for ids. Phone
+first; text contrast at least 4.5:1 and markers at least 3:1 in both themes, checked by a test.
+No popup ever scrolls. Titles and reports written by others are shown as text, never as HTML.</p>
+<h3>License</h3>
+<p>Apache-2.0.</p>

@@ -1,0 +1,297 @@
+<p>One repo, one branch per experiment. This branch, <code>main</code>, is the index, and <code>archive</code> keeps the finished ones.</p>
+<h3>How it works</h3>
+<p>Every experiment starts as a folder. <a href="https://github.com/quirq-ai/experiments/blob/main/publish" target="_blank" rel="noopener"><code>./publish</code></a> turns each folder into a branch:</p>
+<ul>
+<li><strong>Branch name = folder name.</strong> The <code>innernet/</code> folder is the <a href="https://github.com/quirq-ai/experiments/tree/innernet" target="_blank" rel="noopener"><code>innernet</code></a> branch.</li>
+<li><strong>Branch root = folder contents.</strong> Clone a branch and you have the folder back.</li>
+<li><strong>Names can be paths.</strong> The <code>agentic-ai/autoquirq/</code> folder is the <code>agentic-ai/autoquirq</code> branch. A folder that holds experiments, like <code>agentic-ai/</code>, is just a group and never a branch of its own.</li>
+<li><strong>Branches are orphans.</strong> They share no history with each other or with <code>main</code>.</li>
+<li><strong>Commits append.</strong> Publishing never rewrites a branch: each snapshot is a new commit on top, so a branch's log is that experiment's history. A plain <code>./publish</code> adds one only when the folder changed; naming the experiment (<code>./publish trees</code>) adds one even when nothing did. The author date is when the folder last changed.</li>
+<li><strong>Ignored files stay home.</strong> The folder's own <code>.gitignore</code> applies, and <a href="https://github.com/quirq-ai/experiments/blob/main/.publishignore" target="_blank" rel="noopener"><code>.publishignore</code></a> always wins on top of it: dependencies, build caches, <code>.env</code> files, local state. Files over GitHub's 100 MB limit are left out and named in the commit message.</li>
+<li><strong>Untouched clones become pointers.</strong> A folder that is a clean clone of someone else's repo publishes a README with the upstream URL and exact commit instead of a copy.</li>
+<li><strong>Finished experiments get compressed into <code>archive</code>.</strong> <a href="https://github.com/quirq-ai/experiments/blob/main/archive" target="_blank" rel="noopener"><code>./archive</code></a> squashes a branch into one commit on top of the <code>archive</code> branch, then deletes the branch. That commit holds only the experiment's final files, at the root, so the archive tip is the newest archived experiment and each commit back (<code>archive~1</code>, <code>archive~2</code>, ...) is the one archived before it. Earlier snapshots of the branch are not kept.</li>
+</ul>
+<h3>Get an experiment</h3>
+<pre>git clone --single-branch -b &lt;name&gt; https://github.com/quirq-ai/experiments.git &lt;name&gt;</pre>
+<p>Archived ones live one per commit on <code>archive</code>. Clone it and step back through them:</p>
+<pre>git clone --single-branch -b archive https://github.com/quirq-ai/experiments.git archive
+git -C archive checkout HEAD~1   # one experiment further back each time</pre>
+<h3>Publish, archive and rename</h3>
+<p>Clone <code>main</code>, keep experiment folders inside it, then:</p>
+<pre>./publish                # every folder; pushes what changed, then this index
+./publish innernet rea   # only these folders; always a new commit each
+./publish --dry-run      # show what would happen; write and push nothing
+./archive trees          # compress a finished experiment into the archive branch
+./archive --dry-run trees
+./rename autospawn-clone agentic-ai/autoquirq
+./rename --dry-run autospawn-clone agentic-ai/autoquirq</pre>
+<p>Renaming moves the folder, the branch and the index entry together, and the branch keeps its history. The new name can be a path: missing folders like <code>agentic-ai/</code> are created, and a group left empty is removed.</p>
+<p>Archiving leaves the local folder alone, and <code>./publish</code> skips archived names from then on. It refuses when the folder has changes that were never published (publish first, or <code>--force</code> to archive the published version). To revive an experiment, move its entry from <code>archived</code> back to <code>experiments</code> and publish it: it starts a fresh branch, and its archived commit stays where it is.</p>
+<p>Descriptions and stack labels live in <a href="https://github.com/quirq-ai/experiments/blob/main/experiments.json" target="_blank" rel="noopener"><code>experiments.json</code></a>: edit them there and the next publish rewrites the table. Folders listed under <code>skip</code> never get a branch. Clones of repos owned by an account under <code>owners</code> are always copied, never turned into pointers.</p>
+<p><code>./publish</code> only builds on commits it made itself. If a branch gets commits from anywhere else, it stops rather than snapshot over them; <code>--force</code> overrides that.</p>
+<h3>Index</h3>
+<p>29 experiments, most recently changed first.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Experiment</th>
+<th>What it is</th>
+<th>Stack</th>
+<th>Source</th>
+<th>Updated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/quantum-lab" target="_blank" rel="noopener">quantum-lab</a></td>
+<td>Quantum Lab is seven hands-on quantum mechanics experiments, with the Schrödinger equation solved live in the browser.</td>
+<td>HTML</td>
+<td></td>
+<td>2026-11-10</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/research-posts" target="_blank" rel="noopener">research-posts</a></td>
+<td>Your agent activity, in one place.</td>
+<td>Next.js</td>
+<td></td>
+<td>2026-10-30</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/rea" target="_blank" rel="noopener">rea</a></td>
+<td>REA: reverse engineer anything from the terminal or an agent, through one CLI and MCP server.</td>
+<td>TypeScript</td>
+<td><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">morluto/rea</a> (pointer)</td>
+<td>2026-10-13</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/workbench" target="_blank" rel="noopener">workbench</a></td>
+<td>Codex-style desktop app with two engines behind one UI: the Codex app-server and Claude through the Agent SDK.</td>
+<td>Electron</td>
+<td></td>
+<td>2026-10-13</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/claude-messages" target="_blank" rel="noopener">claude-messages</a></td>
+<td>An iMessage-style window onto every Claude Code session running on the machine.</td>
+<td>Node.js</td>
+<td></td>
+<td>2026-10-09</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/solar-claude" target="_blank" rel="noopener">solar-claude</a></td>
+<td>Observatory: pose a question, run it in real physics and keep the trace. Began as a real-ephemeris solar system.</td>
+<td>Vite, Three.js</td>
+<td><a href="https://github.com/sharmasuraj0123/solar-claude" target="_blank" rel="noopener">sharmasuraj0123/solar-claude</a></td>
+<td>2026-10-09</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/brand-dna-visualization" target="_blank" rel="noopener">brand-dna-visualization</a></td>
+<td>Brand DNA: explore the colors, stories, voice and visual world behind a brand.</td>
+<td>Next.js</td>
+<td></td>
+<td>2026-10-03</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/shipnotes-demo" target="_blank" rel="noopener">shipnotes-demo</a></td>
+<td>Runnable tour of the shipnotes web components, vendored unmodified.</td>
+<td>HTML</td>
+<td></td>
+<td>2026-09-26</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/hello-simulator" target="_blank" rel="noopener">hello-simulator</a></td>
+<td>Hello Sim, a one-screen SwiftUI app where each card shows one thing Claude can do in the iOS Simulator, plus XO Space.</td>
+<td>Swift</td>
+<td></td>
+<td>2026-09-25</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/space/space-walk" target="_blank" rel="noopener">space/space-walk</a></td>
+<td>Replays coding-agent sessions on a 3D map of the codebase. A fork of cosmtrek/mindwalk.</td>
+<td>Go</td>
+<td><a href="https://github.com/sharmasuraj0123/space-walk" target="_blank" rel="noopener">sharmasuraj0123/space-walk</a></td>
+<td>2026-09-23</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/makepad" target="_blank" rel="noopener">makepad</a></td>
+<td>Makepad, the AI-accelerated Rust app and game environment, studied for its file explorer and treemap.</td>
+<td>Rust</td>
+<td><a href="https://github.com/makepad/makepad" target="_blank" rel="noopener">makepad/makepad</a> (pointer)</td>
+<td>2026-09-18</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/navier-stokes" target="_blank" rel="noopener">navier-stokes</a></td>
+<td>Flow Lab: an interactive Navier-Stokes fluid lab with four experiments and synchronized measurements.</td>
+<td>Vite, React</td>
+<td><a href="https://github.com/sharmasuraj0123/navier-stokes" target="_blank" rel="noopener">sharmasuraj0123/navier-stokes</a></td>
+<td>2026-09-10</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/autospawn-clone" target="_blank" rel="noopener">autospawn-clone</a></td>
+<td>Mock-data clone of autospawn.com, an AI outbound sales platform, built to study its UX.</td>
+<td>Next.js</td>
+<td></td>
+<td>2026-08-29</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/assets" target="_blank" rel="noopener">assets</a></td>
+<td>Shared quirq brand assets: the mark, favicon, Möbius artwork and OG image.</td>
+<td>Images</td>
+<td></td>
+<td>2026-07-24</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/experiment-space-smoke" target="_blank" rel="noopener">experiment-space-smoke</a></td>
+<td>Generated content for smoke-testing one-click sandbox launch, the sandbox-local Space URL and Agents API turns.</td>
+<td>Markdown</td>
+<td></td>
+<td>2026-07-19</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/os-taxonomy" target="_blank" rel="noopener">os-taxonomy</a></td>
+<td>Marble's open taxonomy of what children learn (1,590 micro-topics in a prerequisite graph), plus a local viewer.</td>
+<td>Vite, React</td>
+<td><a href="https://github.com/withmarbleapp/os-taxonomy" target="_blank" rel="noopener">withmarbleapp/os-taxonomy</a></td>
+<td>2026-07-12</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/trees" target="_blank" rel="noopener">trees</a></td>
+<td>How a Tree Eats Air: a single-page carbon simulation.</td>
+<td>HTML</td>
+<td></td>
+<td>2026-07-12</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/timesfm" target="_blank" rel="noopener">timesfm</a></td>
+<td>TimesFM, Google Research's time-series foundation model, reworked locally.</td>
+<td>Python</td>
+<td><a href="https://github.com/google-research/timesfm" target="_blank" rel="noopener">google-research/timesfm</a></td>
+<td>2026-07-11</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/nirvana" target="_blank" rel="noopener">nirvana</a></td>
+<td>One-pager and create script for Nirvana agent sandboxes: isolated, managed environments for autonomous agents.</td>
+<td>Shell</td>
+<td></td>
+<td>2026-07-09</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/galaxy-sandbox" target="_blank" rel="noopener">galaxy-sandbox</a></td>
+<td>Galaxy and particle simulation where every Claude Code session on the machine becomes its own galaxy.</td>
+<td>Vite, React</td>
+<td></td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/fractal-lab" target="_blank" rel="noopener">fractal-lab</a></td>
+<td>Interactive canvas playground for exploring fractal simulations.</td>
+<td>Next.js</td>
+<td></td>
+<td>2026-06-25</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/space/solar-system" target="_blank" rel="noopener">space/solar-system</a></td>
+<td>Solar system simulation in Next.js and React Three Fiber.</td>
+<td>Next.js, Three.js</td>
+<td></td>
+<td>2026-06-19</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/tiny-world-builder" target="_blank" rel="noopener">tiny-world-builder</a></td>
+<td>A 3D voxel world editor in a single HTML file: build, sculpt, fly through and share tiny worlds.</td>
+<td>HTML, Three.js</td>
+<td><a href="https://github.com/jasonkneen/tiny-world-builder" target="_blank" rel="noopener">jasonkneen/tiny-world-builder</a> (pointer)</td>
+<td>2026-06-19</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/vercel" target="_blank" rel="noopener">vercel</a></td>
+<td>Three Vercel experiments: the AI SDK computer-use demo, a Next.js sandbox deployer and its Python twin.</td>
+<td>Next.js, Python</td>
+<td></td>
+<td>2026-06-08</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/visualizer" target="_blank" rel="noopener">visualizer</a></td>
+<td>Histography-style animation of git history where every dot is a commit.</td>
+<td>Next.js</td>
+<td><a href="https://github.com/sharmasuraj0123/xo-history" target="_blank" rel="noopener">sharmasuraj0123/xo-history</a></td>
+<td>2026-06-08</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/artifact-evolution" target="_blank" rel="noopener">artifact-evolution</a></td>
+<td>One idea in five forms: terminal, markdown one-pager, slide deck, notebook and Next.js app, each kept as an immutable artifact.</td>
+<td>Next.js</td>
+<td></td>
+<td>2026-05-28</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/paperclip" target="_blank" rel="noopener">paperclip</a></td>
+<td>Paperclip, open-source orchestration for zero-human companies, with two local patches.</td>
+<td>Node.js</td>
+<td><a href="https://github.com/paperclipai/paperclip" target="_blank" rel="noopener">paperclipai/paperclip</a></td>
+<td>2026-04-08</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/Remotion" target="_blank" rel="noopener">Remotion</a></td>
+<td>Remotion project with the XO main video plus Clawdbot and XO Agency videos.</td>
+<td>Remotion</td>
+<td></td>
+<td>2026-01-30</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/remotion-studio" target="_blank" rel="noopener">remotion-studio</a></td>
+<td>Bare Remotion starter project.</td>
+<td>Remotion</td>
+<td></td>
+<td>2026-01-25</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Archived</h4>
+<p>Each finished experiment is one commit on the <a href="https://github.com/quirq-ai/experiments/commits/archive" target="_blank" rel="noopener"><code>archive</code></a> branch, newest first: the tip holds the last one archived, and each commit back holds the one before.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Experiment</th>
+<th>What it was</th>
+<th>Archived</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/78dc8909540245d61d2aa941620cefb847a09334" target="_blank" rel="noopener">experiment-20260612</a></td>
+<td>Structured agent environments pilot: a hermetic harness that runs coding agents on xo-cowork-api tasks across environment variants.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/1fe9d9c94c2b123d799a8ed368dfdd4b0332c3c7" target="_blank" rel="noopener">linear-clone</a></td>
+<td>Linear-style tracker (issues, OKRs, sprints, wiki) that mirrors the .xo state files XO agents write.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/59dfde9cbc646d98bd15b57744872da8d67a8d1f" target="_blank" rel="noopener">laya</a></td>
+<td>Laya, a multilingual System 1 decision engine that answers typed questions in one forward pass, with local notes.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/bdf18fcb72cf01630658496094412324de57bd17" target="_blank" rel="noopener">jev-hello</a></td>
+<td>Hello world for Jev, TypeSafe's System One model: typed questions in, probabilities out.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/5cf8fd183d56360c894c710097f0ac846f57037e" target="_blank" rel="noopener">zombie-survival</a></td>
+<td>Zombie Survival, a single-file browser game.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/e3caeedc48a478f2ba5dd53486aef48ea8b7b679" target="_blank" rel="noopener">computing-age</a></td>
+<td>Video essay: computing as one accelerating project, from counting stones to thinking machines.</td>
+<td>2026-10-16</td>
+</tr>
+<tr>
+<td><a href="https://github.com/quirq-ai/experiments/tree/8b2aa8246f6ba3e92ec0eed7429212b8aecc0886" target="_blank" rel="noopener">innernet</a></td>
+<td>A personal internet made from your folders: search them like the web, read your projects like an encyclopedia.</td>
+<td>2026-10-16</td>
+</tr>
+</tbody>
+</table></div>

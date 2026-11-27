@@ -1,0 +1,348 @@
+<h2>Your company's Fabric Chat server</h2>
+<p>This folder is everything one company needs to run its own team chat on its own Hyperledger Fabric node, and to share a workspace with other companies that do the same: three files, and Docker.</p>
+<p>These files belong to release 0.3.0 of <a href="https://github.com/quirq-ai/fabric-chat" target="_blank" rel="noopener">Fabric Chat</a>. Its three images are public on GitHub's container registry, and <code>./chat up</code> downloads them: there is nothing to build and no account to make.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>company.json</code></td>
+<td>The one file you fill in</td>
+</tr>
+<tr>
+<td><code>chat</code></td>
+<td>The command that starts the server and looks after it</td>
+</tr>
+<tr>
+<td><code>compose.yaml</code></td>
+<td>The list of what runs. You should not need to change it</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>./chat up</code> writes two more files from <code>company.json</code>: <code>.env</code>, the settings, and <code>compose.generated.yaml</code>, which lists everything this server opens to the outside. Read that one when you want to know what is open. Do not edit either.</p>
+<p>Nothing secret is ever written into this folder, with one exception you ask for: a backup, which is locked with a passphrase. Every key and password is made on the server and stays in Docker volumes.</p>
+<p>These files are also published by themselves, as the template repository <a href="https://github.com/quirq-ai/fabric-chat-node" target="_blank" rel="noopener">fabric-chat-node</a>. Choose <strong>Use this template</strong> there to make your company's own copy. Keep the copy private if you like: it holds your settings and nothing secret.</p>
+<h3>Before you start</h3>
+<ul>
+<li><strong>A machine with Docker</strong> and Docker Compose version 2. One company's whole server used 300 MB of memory when idle in testing. 2 CPUs, 4 GB of memory and 40 GB of disk is plenty to start.</li>
+<li><strong>The three images</strong> of the release you want to run. <code>images</code> in <code>company.json</code> says where they come from, and <code>./chat up</code> downloads them: about 400 MB the first time. As the template comes, that is GitHub's container registry, where they are public. They are built for servers with Intel or AMD processors, not yet for ARM ones. To run your own build instead, run <code>npm run images</code> in the <code>fabric-chat</code> repository and put <code>fabric-chat</code> in <code>images</code>.</li>
+<li><strong>On Windows</strong>, run the commands in Git Bash, as <code>sh chat up</code>.</li>
+</ul>
+<h3>1. Fill in company.json</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>What it is</th>
+<th>Can it change later?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>The company's name, as people will see it</td>
+<td>Yes. Run <code>./chat restart</code> afterwards</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>The company's ID on every ledger. Use a domain name the company owns, in lower case. People's IDs end in it: <code>alice@aster.example</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td>The company's colour in the app, as six hex digits</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>hosts.chat</code></td>
+<td>The name people's browsers reach the chat by</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>hosts.peer</code>, <code>hosts.orderer</code></td>
+<td>The names other companies' nodes reach this company's node by. They are written into its certificates and its workspaces</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>admin</code></td>
+<td>The first administrator: a handle, a name and a job title</td>
+<td>Only before the first <code>./chat up</code></td>
+</tr>
+<tr>
+<td><code>listen</code></td>
+<td>The address and port of this machine the chat answers on. <code>127.0.0.1</code> means this machine only. <code>0.0.0.0</code> means every network it is on. Leave it out and you get <code>127.0.0.1</code> and port 8080 over plain HTTP, or every network and port 443 over HTTPS</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>https</code></td>
+<td>Leave it out for plain HTTP. <code>"auto"</code> gets a certificate from Let's Encrypt and renews it. <code>"self-signed"</code> is for trying HTTPS on a private network: browsers will warn. See section 5</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>node.address</code></td>
+<td>Opens the node's three ports on this address of the server, so that other companies' servers can reach it. <code>0.0.0.0</code> means every network. Leave it out and the node is closed to every other server</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>images</code>, <code>release</code></td>
+<td>Where the images come from, and which version to run. Keep each on a line of its own</td>
+<td>Yes. See "A new release"</td>
+</tr>
+<tr>
+<td><code>dockerNetwork</code></td>
+<td>Only for several companies on one machine: the name of a Docker network they all join, which stands in for the internet between them. Leave it out on a server of its own</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table></div>
+<p>The ID and the two node names cannot change after the first start, because every certificate and every record carries them. <code>./chat up</code> refuses to go on if they differ from the first time.</p>
+<h3>2. Start it</h3>
+<pre>./chat up</pre>
+<p>The first run takes about 25 seconds once the images are on the machine. It:</p>
+<ol>
+<li>makes the company's root key and certificate, on this machine;</li>
+<li>starts the company's certificate authority and has it issue a certificate to the peer, the orderer and the chat app;</li>
+<li>creates the home workspace: a ledger only this company is on;</li>
+<li>deploys the chat's rules to it;</li>
+<li>starts the chat app, which makes the first administrator and a #general channel.</li>
+</ol>
+<p>It ends by printing where the chat is, and a one-time link for the first administrator. They open the link and choose a password.</p>
+<p>Run <code>./chat up</code> again whenever you like. Whatever is already in place is left alone, the first administrator's link included, and it takes about 12 seconds. If a step fails, it says which one and why, and starts nothing after it.</p>
+<p>If the server itself restarts, everything on it starts again by itself. In testing a company answered within two seconds of its server's Docker being up, and people were still signed in.</p>
+<h3>3. Add people</h3>
+<p>An administrator signs in, opens <strong>People</strong> in the left rail and chooses <strong>Add a person</strong>.</p>
+<ul>
+<li>The company's certificate authority signs the new person a certificate, and they join the workspace's directory.</li>
+<li>The administrator gets a one-time link to pass on. The person opens it and chooses their own password, so no administrator ever knows it.</li>
+<li>A link works once, for seven days. <strong>New link</strong> makes another. For someone who has forgotten their password, <strong>Reset password</strong> does the same.</li>
+<li>An administrator can make another person an administrator. There is always at least one.</li>
+</ul>
+<p>If every administrator is locked out, whoever runs the server can let one back in:</p>
+<pre>./chat admin-link</pre>
+<h3>4. Share a workspace with another company</h3>
+<p>Any two companies that each run this server can share a workspace: a second ledger, held by exactly the two of them. Their servers must be able to reach each other, which is section 5. An administrator opens <strong>Other companies</strong> in the left rail.</p>
+<ol>
+<li><strong>Swap cards.</strong> Copy your company's card and send it to the other company's administrator, by email or any other way. Ask for theirs. A card holds a company's name, its root certificate and where its nodes are, and nothing secret.</li>
+<li><strong>One of you starts the workspace.</strong> Choose <strong>Start a workspace</strong>, give it a name and paste the other company's card. You get an invitation to send back.</li>
+<li><strong>The other accepts.</strong> Choose <strong>Accept an invitation</strong>, paste it, look at who is in it, and accept.</li>
+</ol>
+<p>The two nodes then agree on the rules by themselves, and the workspace appears at the left edge of the chat for everyone at both companies. Nobody has to click again.</p>
+<ul>
+<li><strong>Check the fingerprint.</strong> A card shows a fingerprint of the company's root certificate. Read it to the other administrator by phone or in person the first time. It is how you know the card was not swapped on the way.</li>
+<li><strong>The app says whether your server reaches theirs.</strong> When you paste a card, and again when you check an invitation, your node tries the other company's peer and orderer. It tells you if one does not answer, and it tells you if what answers is not that company's node: its certificate must be signed under the root certificate on the card. Whether their server reaches yours shows on their side, the same way.</li>
+<li><strong>Your node checks the invitation.</strong> Before it joins, it works out what the workspace's first block should say for the cards in the invitation, and joins only if the block says exactly that: these companies, each with one vote, and no others.</li>
+<li><strong>Three or more companies.</strong> Paste several cards when you start the workspace, and send every company the same invitation. The workspace is usable as soon as more than half have accepted.</li>
+</ul>
+<p>What to know about a shared workspace:</p>
+<ul>
+<li>A workspace of two takes messages only while both companies' nodes are running. A workspace of three or more needs more than half. Your own workspace is never affected.</li>
+<li>A message can take a few seconds longer just after a company's node stops or starts, and while a company that was invited has not accepted yet. The app offers the message to the workspace's orderers again until one takes it, for up to half a minute. If a message is refused, <code>./chat logs app</code> says which orderers did not take it.</li>
+<li>Each company on it holds a full copy of every open channel, and of every conversation its people are in. A conversation among your own people only stays on your node: the others receive hashes.</li>
+<li>In a workspace of three or more, a conversation among people of two of the companies is still kept by all of them. The app says so before you create it.</li>
+<li>The list of companies cannot be changed afterwards, and a company cannot leave. Start a new workspace instead.</li>
+</ul>
+<h3>5. Put it on the internet</h3>
+<p>Three things make a server reachable: names, open ports and a certificate.</p>
+<p><strong>Names.</strong> Point three names at the server's public address, with your DNS provider: the ones in <code>hosts.chat</code>, <code>hosts.peer</code> and <code>hosts.orderer</code>. All three lead to the same server.</p>
+<p><strong>Settings.</strong> Add two lines to <code>company.json</code>, and take <code>listen</code> out:</p>
+<pre>  "https": "auto",
+  "node": { "address": "0.0.0.0" },</pre>
+<p>Then run <code>./chat up</code>. The chat is now at <code>https://</code> followed by <code>hosts.chat</code>, and links the server hands out start with that. Signing in uses a cookie browsers send over HTTPS only.</p>
+<p><strong>Ports.</strong> These are open on the server afterwards, and nothing else is.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Port</th>
+<th>Who needs to reach it</th>
+<th>What answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>443</td>
+<td>Your people's browsers, and Let's Encrypt</td>
+<td>The chat, over HTTPS</td>
+</tr>
+<tr>
+<td>80</td>
+<td>The same</td>
+<td>Sends plain HTTP on to HTTPS, and lets Let's Encrypt check the name</td>
+</tr>
+<tr>
+<td>7051</td>
+<td>Other companies' servers</td>
+<td>The peer</td>
+</tr>
+<tr>
+<td>7050</td>
+<td>Other companies' servers</td>
+<td>The orderer, for their peers</td>
+</tr>
+<tr>
+<td>7055</td>
+<td>Other companies' servers</td>
+<td>The orderer, for their orderers. It insists on a certificate from both ends</td>
+</tr>
+</tbody>
+</table></div>
+<p>Never open these, and <code>./chat</code> never does: 7054 (the certificate authority), 5984 (the database), 7053 and 9443 (the orderer's admin and status ports), 8080 (the app behind the proxy).</p>
+<p>Docker opens the ports above by itself, past a firewall that runs on the same server, such as <code>ufw</code>. To limit who reaches them, use the firewall your hosting provider puts in front of the server. <code>./chat status</code> says what is open.</p>
+<p><strong>The certificate.</strong> With <code>"auto"</code>, the server asks Let's Encrypt for a certificate for <code>hosts.chat</code>, proves it answers to that name, and renews the certificate before it runs out. It needs ports 443 and 80 open and the name pointing at the server before <code>./chat up</code>. A company with its own certificate authority that speaks the same protocol writes a block in place of the word:</p>
+<pre>  "https": { "authority": "https://ca.aster.example/acme/directory", "root": "-----BEGIN CERTIFICATE-----\n…", "email": "it@aster.example" },</pre>
+<p>This was tested against Pebble, the test server Let's Encrypt publishes, on machines standing in for two servers. It has not been run against Let's Encrypt itself, which needs a public name.</p>
+<p><strong>The node's own traffic</strong> is always encrypted and signed, with certificates from each company's own authority. Anyone on the internet can connect to ports 7051 and 7050, as with any Fabric network, but a node acts only on requests signed by a member of the workspace concerned.</p>
+<h3>6. Back it up</h3>
+<pre>./chat backup</pre>
+<p>It asks for a passphrase twice, pauses everything, copies every volume into one file in <code>backups/</code>, and starts everything again. In testing the chat was away for 30 seconds. The file holds every key the company has, so it is locked: without the passphrase it cannot be opened, by you either. Copy the file off the server and keep the passphrase somewhere else.</p>
+<p>To run it on a schedule, give the passphrase in <code>CHAT_BACKUP_PASSPHRASE</code>, for example from a file only root can read.</p>
+<p>To bring a company back on an empty server, put this folder's three files there with the same <code>company.json</code>, put the backup in <code>backups/</code>, and run:</p>
+<pre>./chat restore backups/aster.example-20261112-211309.fcbackup</pre>
+<p>It refuses a wrong passphrase, a file that was changed or cut short, a <code>company.json</code> for another company, and a server that already holds something. In each case it leaves the server empty. In testing a company was back 28 seconds after the command, on a new server at the same names: people signed in with the passwords they had, and the chat kept its HTTPS certificate.</p>
+<p>What a restore brings back:</p>
+<ul>
+<li><strong>Everything up to the backup</strong>: the ledger, every key, the accounts.</li>
+<li><strong>What was said in a shared workspace after the backup.</strong> Your node gets it again from the other companies' nodes.</li>
+<li><strong>Not what was said after the backup in your own workspace, or in a conversation among your own people only</strong>, even inside a shared workspace. No other server ever held it. Back up as often as you can bear to lose.</li>
+<li><strong>Not an edit made after the backup to a message among your own people.</strong> The message shows its old words again. It can be read, but no longer changed or deleted, and the app says why when someone tries. The rest of the conversation works as before.</li>
+<li><strong>Not sign-ins made after the backup.</strong> Those people sign in again.</li>
+</ul>
+<p>Restore a backup once, onto one server. Two servers running as the same company would each sign in its name.</p>
+<h3>Everyday commands</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>./chat up</code></td>
+<td>Start everything. Safe to run again</td>
+</tr>
+<tr>
+<td><code>./chat status</code></td>
+<td>What is running, where the chat is, whether the node is open, and how many blocks the ledger holds</td>
+</tr>
+<tr>
+<td><code>./chat logs app</code></td>
+<td>What one part has printed: <code>app</code>, <code>agent</code>, <code>proxy</code>, <code>peer</code>, <code>orderer</code>, <code>ca</code>, <code>couchdb</code> or <code>chaincode</code></td>
+</tr>
+<tr>
+<td><code>./chat restart</code></td>
+<td>Restart the chat app, for example after changing the company's name. People stay signed in</td>
+</tr>
+<tr>
+<td><code>./chat admin-link [handle]</code></td>
+<td>A new one-time link for an administrator</td>
+</tr>
+<tr>
+<td><code>./chat backup</code></td>
+<td>Copy everything into one locked file in <code>backups/</code></td>
+</tr>
+<tr>
+<td><code>./chat restore backups/&lt;file&gt;</code></td>
+<td>Bring a backup back on an empty server</td>
+</tr>
+<tr>
+<td><code>./chat stop</code></td>
+<td>Pause everything. Nothing is lost</td>
+</tr>
+<tr>
+<td><code>./chat down</code></td>
+<td>Remove the containers. The ledger, the keys and the accounts stay, and <code>./chat up</code> brings everything back</td>
+</tr>
+<tr>
+<td><code>./chat wipe</code></td>
+<td>Remove everything for good. It asks for the company ID first. Backups are not touched</td>
+</tr>
+</tbody>
+</table></div>
+<h3>A new release</h3>
+<p><code>chat</code> and <code>compose.yaml</code> belong to a release, like the images. To move to a newer one:</p>
+<ol>
+<li>Make a backup.</li>
+<li>Replace <code>chat</code> and <code>compose.yaml</code> with the ones that come with the new release. Leave <code>company.json</code> alone, except for the next step.</li>
+<li>Set <code>release</code> in <code>company.json</code> to the new version.</li>
+<li>Run <code>./chat up</code>.</li>
+</ol>
+<p>If the files and the release do not match, <code>./chat up</code> says so and changes nothing. In testing a company moved from 0.2.0 to 0.3.0 in about 20 seconds, with people still signed in.</p>
+<p>A release that leaves the chat's rules as they are can be taken by each company in its own time: two companies kept talking with one on 0.2.0 and the other on 0.3.0. A release that changes the rules must be taken by every company in a shared workspace, and moving the rules is not built yet.</p>
+<h3>What is kept where</h3>
+<p>Each of these is a Docker volume on the server, named after the company. A backup holds all of them except <code>desk</code>.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Volume</th>
+<th>What is in it</th>
+<th>If it is lost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ca</code></td>
+<td>The company's root key, and the register of every certificate it has signed</td>
+<td>The company can no longer add people or prove who it is</td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td>The nodes' own keys and certificates, the cards of the companies it knows, and each workspace's first block</td>
+<td>The nodes cannot start</td>
+</tr>
+<tr>
+<td><code>peer</code>, <code>orderer</code></td>
+<td>The ledger: every block of every workspace</td>
+<td>The home workspace's history is gone</td>
+</tr>
+<tr>
+<td><code>couchdb</code></td>
+<td>The current value of every record: a fast index of the ledger</td>
+<td>Fabric can rebuild it from the ledger. Not tried here</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>Accounts, sessions and each person's private key, locked</td>
+<td>People must be added again. They keep their IDs and their messages. This was tested for one person</td>
+</tr>
+<tr>
+<td><code>app</code></td>
+<td>The key that unlocks the keys in <code>data</code>, and the app's own certificates</td>
+<td>The keys in <code>data</code> can no longer be unlocked</td>
+</tr>
+<tr>
+<td><code>proxy</code></td>
+<td>The HTTPS certificate for the chat's name, and its key</td>
+<td>The server asks for a new one at the next start</td>
+</tr>
+<tr>
+<td><code>rules</code>, <code>couchdb-config</code></td>
+<td>Small settings made at the first start</td>
+<td>The node cannot start</td>
+</tr>
+<tr>
+<td><code>desk</code></td>
+<td>Requests from the chat app to the node's agent while they are being answered</td>
+<td>Nothing: it is emptied at every start</td>
+</tr>
+</tbody>
+</table></div>
+<h3>What to know before relying on it</h3>
+<ul>
+<li><strong>Over plain HTTP, keep the chat on this machine.</strong> Without <code>https</code>, keep <code>listen.address</code> at <code>127.0.0.1</code> unless the machine's network is private. On an open network, passwords would travel in the clear.</li>
+<li><strong>Whoever runs this server is trusted.</strong> They hold the company's root key, so they can read every message and sign a certificate in anyone's name. That is the same trust a company places in whoever runs its email.</li>
+<li><strong>The app signs on people's behalf.</strong> Each person's key stays on the server, locked with a key kept in a separate volume. Keys on people's own devices are a later step.</li>
+<li><strong>Certificates of the company's own authority last ten years.</strong> Renewing one is not built yet. The HTTPS certificate is another matter: it renews by itself.</li>
+<li><strong>It has run on machines standing in for servers, not yet on two real ones.</strong> Each stand-in was a Docker of its own with its own address, reached only by name and only through the ports above.</li>
+</ul>
+<h3>Not built yet</h3>
+<ul>
+<li>Leaving a shared workspace, or adding a company to one.</li>
+<li>Removing a person. A person who leaves keeps a working certificate.</li>
+<li>Moving every company in a shared workspace to a new version of the chat's rules.</li>
+<li>Backups that run by themselves and leave the server by themselves.</li>
+</ul>
+<p>The plan for these is in the <code>fabric-chat</code> repository, in <a href="https://github.com/quirq-ai/fabric-chat/blob/main/docs/many-companies.md" target="_blank" rel="noopener">docs/many-companies.md</a>.</p>

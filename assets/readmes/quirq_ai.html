@@ -1,0 +1,1289 @@
+<p>
+  <a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/assets/readme-banner.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/quirq_ai/main/public/assets/readme-banner.png" alt="A continuous glass ribbon refracting the quirq spectrum across a black field" loading="lazy"></a>
+</p>
+<h2>quirq · work at light speed</h2>
+<p>
+  A cinematic, data-driven Next.js site for the unit of verified agent work.
+  <br>
+  Tokens meter what agents consume. <strong>quirqs meter what they deliver.</strong>
+</p>
+<p>
+  <a href="https://quirq.ai" target="_blank" rel="noopener">Live site</a>
+  ·
+  <a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/quirq-whitepaper.pdf" target="_blank" rel="noopener">Whitepaper</a>
+  ·
+  <a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/llm.txt" target="_blank" rel="noopener">LLM-readable paper</a>
+  ·
+  Create a page from JSON
+</p>
+<p>
+  <a href="https://camo.githubusercontent.com/5426f02bfa8c3aabdaf0b47a9b86a04aa3105ef63e95565fdabfc5d91daafaa6/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4e6578742e6a732d31362e322e31312d3030303030303f6c6f676f3d6e657874646f746a73266c6f676f436f6c6f723d7768697465" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/Next.js-16.2.11-000000?logo=nextdotjs&amp;logoColor=white" alt="Next.js 16.2.11" loading="lazy"></a>
+  <a href="https://camo.githubusercontent.com/c203ddf8fae478b64ab874763802cdfd3369ea0778c46167fb4ec0ed56eb06d2/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f52656163742d31392e322e342d3134394543413f6c6f676f3d7265616374266c6f676f436f6c6f723d7768697465" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/React-19.2.4-149ECA?logo=react&amp;logoColor=white" alt="React 19.2.4" loading="lazy"></a>
+  <a href="https://camo.githubusercontent.com/5080f6b523c5f0c19670bbf8b70b74b32208bec0245219115070c1bf681a2506/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f547970655363726970742d7374726963742d3331373843363f6c6f676f3d74797065736372697074266c6f676f436f6c6f723d7768697465" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&amp;logoColor=white" alt="TypeScript" loading="lazy"></a>
+  <a href="https://camo.githubusercontent.com/58dd500617c71d04c6787348ab8f124e5817947e401185cf5f3f96c4c9c7432b/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f54687265652e6a732d302e3138352e312d3030303030303f6c6f676f3d7468726565646f746a73266c6f676f436f6c6f723d7768697465" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/Three.js-0.185.1-000000?logo=threedotjs&amp;logoColor=white" alt="Three.js 0.185.1" loading="lazy"></a>
+  <a href="https://camo.githubusercontent.com/79e95e7426d615ab777e50f1442f48228e6a2237da412d0d43d7999b2d965ab9/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f5461696c77696e645f4353532d342d3036423644343f6c6f676f3d7461696c77696e64637373266c6f676f436f6c6f723d7768697465" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&amp;logoColor=white" alt="Tailwind CSS 4" loading="lazy"></a>
+</p>
+<hr>
+<h3>What this repository is</h3>
+<p>This is the marketing and research site for <a href="https://quirq.ai" target="_blank" rel="noopener">quirq</a>. It is not built as a sequence of disconnected sections. It is one continuous shot:</p>
+<ul>
+<li>A single procedural glass ribbon stays mounted behind the page.</li>
+<li>Each content section registers itself as a <strong>beat</strong>.</li>
+<li>Scroll position becomes a fractional beat such as <code>1.42</code>.</li>
+<li>A choreography track blends all 14 pose, optics, and lighting channels.</li>
+<li>The same renderer can turn React components, plain objects, or a branching JSON tree into a staged page.</li>
+</ul>
+<p>The visual argument is carried by the glass itself: cost drains toward monochrome; verified delivery restores the full spectrum.</p>
+<h3>Contents</h3>
+<ul>
+<li>Experience tour</li>
+<li>Technology</li>
+<li>Quick start</li>
+<li>Architecture</li>
+<li>Repository map</li>
+<li>Three ways to author a page</li>
+<li>Turn JSON into a page</li>
+<li>Journey JSON reference</li>
+<li>Story beat reference</li>
+<li>Scene and glass customization</li>
+<li>Brand, content, and UI customization</li>
+<li>Runtime, performance, and accessibility</li>
+<li>Validation and golden testing</li>
+<li>Production notes</li>
+</ul>
+<h3>Experience tour</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Purpose</th>
+<th>Primary source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/</code></td>
+<td>The main five-beat story: hero, ecosystem, tokens, quirqs, ledger, invite</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/page.tsx" target="_blank" rel="noopener"><code>app/page.tsx</code></a>, <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/beats" target="_blank" rel="noopener"><code>components/beats</code></a></td>
+</tr>
+<tr>
+<td><code>/what-is-quirq</code></td>
+<td>A focused explainer using the shared stage</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/what-is-quirq" target="_blank" rel="noopener"><code>app/what-is-quirq</code></a></td>
+</tr>
+<tr>
+<td><code>/how-it-works</code></td>
+<td>The journey JSON authoring manual, rendered by the system it explains</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/how-it-works/story.ts" target="_blank" rel="noopener"><code>app/how-it-works/story.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/beats</code></td>
+<td>Fractional traversal and the beats-array contract</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/beats" target="_blank" rel="noopener"><code>app/beats</code></a></td>
+</tr>
+<tr>
+<td><code>/scenes</code></td>
+<td>The 14 scene channels, camera-by-relativity, and pose presets</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/scenes/story.ts" target="_blank" rel="noopener"><code>app/scenes/story.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/dynamic</code></td>
+<td>A complete example of a page whose middle is plain data</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/dynamic/story.ts" target="_blank" rel="noopener"><code>app/dynamic/story.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/editor</code></td>
+<td>A live authoring surface for copy, layout, poses, optics, ordering, and JSON export</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/editor/editor.tsx" target="_blank" rel="noopener"><code>app/editor/editor.tsx</code></a></td>
+</tr>
+<tr>
+<td><code>/journey</code></td>
+<td>A branching page generated from <code>.quirq/journeys/*.json</code></td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/journey" target="_blank" rel="noopener"><code>app/journey</code></a></td>
+</tr>
+<tr>
+<td><code>/golden</code></td>
+<td>The zero-delta visual choreography harness</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/golden" target="_blank" rel="noopener"><code>app/golden</code></a>, <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/golden.ts" target="_blank" rel="noopener"><code>lib/golden.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/registry</code></td>
+<td>How beat sections announce themselves at runtime</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/registry" target="_blank" rel="noopener"><code>app/registry</code></a>, <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/beat-registry.ts" target="_blank" rel="noopener"><code>lib/beat-registry.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/tree</code></td>
+<td>Cascaded, branchable choreography authoring</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/tree" target="_blank" rel="noopener"><code>app/tree</code></a>, <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/choreo-tree.ts" target="_blank" rel="noopener"><code>components/stage/choreo-tree.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/research</code></td>
+<td>Research index generated from typed content</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/research.ts" target="_blank" rel="noopener"><code>lib/research.ts</code></a></td>
+</tr>
+<tr>
+<td><code>/research/[slug]</code></td>
+<td>Statically generated research articles</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/research/%5Bslug%5D/page.tsx" target="_blank" rel="noopener"><code>app/research/[slug]/page.tsx</code></a></td>
+</tr>
+<tr>
+<td><code>/quirq-whitepaper.pdf</code></td>
+<td>Static PDF whitepaper</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/quirq-whitepaper.pdf" target="_blank" rel="noopener"><code>public/quirq-whitepaper.pdf</code></a></td>
+</tr>
+<tr>
+<td><code>/llm.txt</code></td>
+<td>The whitepaper as one machine-readable text file</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/llm.txt" target="_blank" rel="noopener"><code>public/llm.txt</code></a></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Technology</h3>
+<ul>
+<li><strong>Next.js 16.2.11</strong> with App Router and Turbopack</li>
+<li><strong>React 19.2.4</strong></li>
+<li><strong>Tailwind CSS 4</strong></li>
+<li><strong>react-three-fiber 9</strong>, <strong>drei 10</strong>, and <strong>three 0.185</strong></li>
+<li><strong>Motion 12</strong> for content entrance choreography</li>
+<li><strong>Lenis 1.3</strong> for smooth scroll</li>
+<li>TypeScript with the <code>@/*</code> root alias</li>
+</ul>
+<p>The Three.js scene is client-only and lazily imported. The page shell, copy, and layout can paint before the roughly 1 MB 3D dependency graph arrives.</p>
+<h3>Quick start</h3>
+<h4>Requirements</h4>
+<ul>
+<li>Node.js <code>20.9</code> or newer</li>
+<li>pnpm</li>
+<li>A browser with WebGL for the live stage; a still-image fallback is included</li>
+</ul>
+<h4>Install and run</h4>
+<pre>pnpm install
+pnpm dev</pre>
+<p>Open <a href="http://localhost:3000" target="_blank" rel="noopener">http://localhost:3000</a>.</p>
+<h4>Production build</h4>
+<pre>pnpm build
+pnpm start</pre>
+<p>No application environment variables are required. The build does need network access the first time <code>next/font</code> fetches Inter, Poppins, and JetBrains Mono.</p>
+<h3>Architecture</h3>
+<h4>From scroll to glass</h4>
+  
+    
+      <pre>flowchart LR
+    A["Story content"] --&gt; B["StoryBeat or custom beat component"]
+    B --&gt; C["Beat section registers id, index, and element"]
+    C --&gt; D["ScrollRuntime measures section centres"]
+    D --&gt; E["stage.beat becomes a fractional index"]
+    E --&gt; F["sampleKeyframes blends adjacent poses"]
+    F --&gt; G["GlassForm damps 14 live channels"]
+    G --&gt; H["One persistent ribbon is re-staged"]
+    D --&gt; I["stage.progress"]
+    I --&gt; J["CSS --scroll"]
+    J --&gt; K["Spectrum progress rule"]
+</pre>
+    
+  
+  
+    
+      Loading
+  
+<p>The hot path deliberately avoids React state. <code>ScrollRuntime</code> writes fast-changing values into the module-level <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/stage-store.ts" target="_blank" rel="noopener"><code>stage</code></a> store; <code>useFrame</code> reads them inside the separate react-three-fiber reconciler root.</p>
+<h4>From a <code>.quirq</code> JSON file to a page</h4>
+  
+    
+      <pre>flowchart TD
+    A[".quirq/journeys/my-story.json"] --&gt; B["GET /api/journeys/my-story"]
+    B --&gt; C["validateDefinition"]
+    C --&gt;|valid| D["resolveDefinition"]
+    C --&gt;|invalid| X["Refuse the file with a readable error"]
+    D --&gt; E["Named pose + tweaks becomes a full keyframe"]
+    D --&gt; F["Beat object stays plain render data"]
+    E --&gt; G["Visited node path becomes overrideLeaves track"]
+    F --&gt; H["StoryBeat renders each visited node"]
+    G --&gt; I["Glass follows the chosen branch"]
+    H --&gt; I
+    I --&gt; J["/journey?j=my-story"]
+</pre>
+    
+  
+  
+    
+      Loading
+  
+<h4>The three layers</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Owns</th>
+<th>Important files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Content</td>
+<td>Headlines, rows, tiles, calls to action, choices, research</td>
+<td><code>components/beats/*</code>, <code>app/*/story.ts</code>, <code>.quirq/journeys/*.json</code>, <code>lib/research.ts</code></td>
+</tr>
+<tr>
+<td>Choreography</td>
+<td>Beat registration, scroll mapping, pose resolution, interpolation</td>
+<td><code>lib/beat-registry.ts</code>, <code>components/scroll-runtime.tsx</code>, <code>components/stage/choreo-tree.ts</code>, <code>components/stage/choreography.ts</code></td>
+</tr>
+<tr>
+<td>Rendering</td>
+<td>DOM story components, glass mesh, material, lights, overlays</td>
+<td><code>components/story/*</code>, <code>components/ui/*</code>, <code>components/stage/*</code>, <code>app/globals.css</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Repository map</h3>
+<pre><code>.
+├── .quirq/
+│   └── journeys/                 JSON-authored branching pages
+├── app/
+│   ├── api/journeys/             list, read, dev-only write, and recording APIs
+│   ├── editor/                   live page and scene editor
+│   ├── journey/                  JSON model, resolver, and branching runtime
+│   ├── research/                 research index and generated article routes
+│   ├── dynamic/                  canonical data-driven page example
+│   ├── scenes/                   scene customization guide
+│   ├── golden/ registry/ tree/   architecture feature pages
+│   ├── layout.tsx                fonts, metadata, motion provider, no-JS fallback
+│   ├── page.tsx                  composed home page
+│   └── globals.css               design tokens and global visual language
+├── components/
+│   ├── beats/                    hand-composed home sections
+│   ├── story/                    BeatData type and generic StoryBeat renderer
+│   ├── stage/                    canvas, mesh, shader, track, and choreography
+│   ├── ui/                       primitives, navigation, footer, agent handoff
+│   ├── scroll-runtime.tsx        DOM measurement → fractional beat mapping
+│   └── stage-page.tsx            shared stage shell
+├── lib/
+│   ├── beat-registry.ts          runtime beat registration
+│   ├── stage-store.ts            allocation-free frame state
+│   ├── golden.ts                 dev capture harness
+│   ├── lighting.ts               coupled brightness presets
+│   ├── research.ts               typed research content
+│   └── spectrum.ts               the seven brand colors
+├── public/
+│   ├── assets/                   favicon, social art, fallback, README banner
+│   ├── llm.txt                   machine-readable whitepaper
+│   └── quirq-whitepaper.pdf
+├── docs/
+│   ├── animation.md              deeper animation-system walkthrough
+│   └── goldens/                  captured choreography baselines
+├── next.config.ts
+└── package.json
+</code></pre>
+<h3>Three ways to author a page</h3>
+<p>Choose the lowest level that gives you the control you need.</p>
+<h4>1. Compose custom React beats</h4>
+<p>Use this when a section needs bespoke markup or interaction. The home page follows this pattern:</p>
+<pre>import { StagePage } from "@/components/stage-page";
+import { Hero } from "@/components/beats/hero";
+import { Delivery } from "@/components/beats/delivery";
+export default function Page() {
+  return (
+    &lt;StagePage&gt;
+      &lt;Hero /&gt;
+      &lt;Delivery /&gt;
+    &lt;/StagePage&gt;
+  );
+}</pre>
+<p>Every staged section must render the shared <code>Beat</code> primitive or call <code>registerBeat</code> directly. A raw section that never registers is invisible to the choreography.</p>
+<h4>2. Render plain <code>BeatData</code></h4>
+<p>Use this for linear pages whose layout fits the generic renderer:</p>
+<pre>import { StagePage } from "@/components/stage-page";
+import { StoryBeat } from "@/components/story/story-beat";
+import type { BeatData } from "@/components/story/types";
+const STORY: BeatData[] = [
+  {
+    index: 0,
+    id: "intro",
+    layout: "center",
+    title: ["Your first line,", "made of light."],
+    glass: 1,
+    lede: "A page can be an array of plain objects.",
+  },
+  {
+    index: 1,
+    id: "proof",
+    layout: "left",
+    marker: "01 · the proof",
+    title: ["State in,", "state out."],
+    rows: [
+      { title: "Capture before.", note: "Record the world before work starts." },
+      { title: "Verify after.", note: "Score the actual changed state." },
+    ],
+  },
+];
+export default function Page() {
+  return (
+    &lt;StagePage&gt;
+      {STORY.map((beat) =&gt; (
+        &lt;StoryBeat key={beat.id} data={beat} /&gt;
+      ))}
+    &lt;/StagePage&gt;
+  );
+}</pre>
+<p>Pages that use the repository’s default choreography should have no more than its five resolved leaves. Fewer beats are fine. The editor and journey runtime can exceed five because they provide their own track through <code>overrideLeaves</code>.</p>
+<h4>3. Generate a branching page from JSON</h4>
+<p>Use a <code>.quirq</code> journey when content should branch based on visitor choices, or when the page should be transferable as one data object without adding a route component.</p>
+<p>The rest of this README focuses on this path.</p>
+<h3>Turn JSON into a page</h3>
+<h4>Fastest path: use the live editor</h4>
+<ol>
+<li>Run <code>pnpm dev</code>.</li>
+<li>Open <a href="http://localhost:3000/editor" target="_blank" rel="noopener">http://localhost:3000/editor</a> on a desktop-sized viewport.</li>
+<li>Add, remove, or reorder beats.</li>
+<li>Edit marker, title, lede, alignment, and glass title line.</li>
+<li>Pick a pose preset or tune any of the 14 channels.</li>
+<li>Set a kebab-case slug such as <code>product-tour</code>.</li>
+<li>Choose <strong>Copy journey JSON</strong> to copy the complete document.</li>
+<li>Choose <strong>Create page</strong> in development to write <code>.quirq/journeys/product-tour.json</code>.</li>
+<li>Open <code>/journey?j=product-tour</code>.</li>
+</ol>
+<p>The editor exports a valid <strong>linear</strong> journey: one node per beat and one forward choice per node. Open the generated JSON afterward to add forks, richer content blocks, or different prompts.</p>
+<blockquote>
+<p><code>Create page</code> is intentionally development-only. In production, the <code>.quirq</code> folder is read-only.</p>
+</blockquote>
+<h4>Hand-authored path</h4>
+<p>Create <code>.quirq/journeys/launch-story.json</code>:</p>
+<pre>{
+  "slug": "launch-story",
+  "name": "Launch story",
+  "rules": {
+    "start": "intro",
+    "maxDepth": 2,
+    "allowRewind": true,
+    "allowReplay": true
+  },
+  "nodes": {
+    "intro": {
+      "short": "start",
+      "pose": {
+        "base": "centre"
+      },
+      "beat": {
+        "layout": "center",
+        "title": ["A page from", "one JSON file."],
+        "glass": 1,
+        "lede": "The copy, the branch, and the glass pose all travel together."
+      },
+      "prompt": "Where should we go next?",
+      "choices": [
+        {
+          "label": "Show me the proof",
+          "to": "proof"
+        }
+      ]
+    },
+    "proof": {
+      "short": "the proof",
+      "pose": {
+        "base": "flooded",
+        "tweaks": {
+          "spin": 0.2,
+          "burst": 0.78
+        }
+      },
+      "beat": {
+        "layout": "right",
+        "marker": "01 · verified",
+        "title": ["State changed,", "value proved."],
+        "glass": 1,
+        "rows": [
+          {
+            "title": "The page renders from data.",
+            "note": "StoryBeat converts this object into the real page."
+          },
+          {
+            "title": "The glass follows the node.",
+            "note": "The named pose is resolved and added to the active track."
+          }
+        ],
+        "links": [
+          {
+            "href": "/what-is-quirq",
+            "label": "What is quirq"
+          },
+          {
+            "href": "/quirq-whitepaper.pdf",
+            "label": "Read the paper",
+            "tone": "ghost"
+          }
+        ]
+      }
+    }
+  }
+}</pre>
+<p>Then:</p>
+<ol>
+<li>Keep the filename and <code>slug</code> identical.</li>
+<li>Open <code>http://localhost:3000/journey?j=launch-story</code>.</li>
+<li>If the journey library was already open, refresh it with the page’s <strong>Reload .quirq</strong> control.</li>
+<li>Edit the file and reload to iterate.</li>
+</ol>
+<p>No React component, route file, or registry entry is needed.</p>
+<h4>Send a definition through the development API</h4>
+<p>With the dev server running:</p>
+<pre>curl -X POST http://localhost:3000/api/journeys \
+  -H "content-type: application/json" \
+  --data-binary @.quirq/journeys/launch-story.json</pre>
+<p>The API rejects cross-origin browser writes, invalid slugs, missing start nodes, unknown poses, and dangling choice targets. Writes use a temporary file plus rename so readers never observe half-written JSON.</p>
+<h4>Generate a linear JSON object programmatically</h4>
+<p>This plain Node.js example turns a content array into the same shape the editor exports:</p>
+<pre>const slug = "product-tour";
+const pages = [
+  {
+    short: "start",
+    title: ["Meet your", "new workflow."],
+    layout: "center",
+    pose: "centre",
+    lede: "The opening of the generated page."
+  },
+  {
+    short: "the proof",
+    title: ["One state,", "then another."],
+    layout: "left",
+    pose: "flooded",
+    lede: "The final node closes the linear walk."
+  }
+];
+const ids = pages.map((_, index) =&gt; `b${index + 1}`);
+const journey = {
+  slug,
+  name: "Product tour",
+  rules: {
+    start: ids[0],
+    maxDepth: pages.length,
+    allowRewind: true,
+    allowReplay: true
+  },
+  nodes: Object.fromEntries(
+    pages.map((page, index) =&gt; [
+      ids[index],
+      {
+        short: page.short,
+        pose: { base: page.pose },
+        beat: {
+          layout: page.layout,
+          title: page.title,
+          lede: page.lede
+        },
+        ...(index &lt; pages.length - 1
+          ? {
+              prompt: "Keep walking?",
+              choices: [
+                {
+                  label: pages[index + 1].title.join(" "),
+                  to: ids[index + 1]
+                }
+              ]
+            }
+          : {})
+      }
+    ])
+  )
+};
+console.log(JSON.stringify(journey, null, 2));</pre>
+<p>Save the printed object as <code>.quirq/journeys/product-tour.json</code>, or POST it to the development API.</p>
+<h3>Journey JSON reference</h3>
+<h4>Top-level document</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Type</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slug</code></td>
+<td>Yes</td>
+<td><code>string</code></td>
+<td>Kebab-case identity used by the filename, <code>?j=</code> URL, traces, and recordings. Accepted form: <code>^[a-z0-9-]{1,64}$</code>.</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>Yes</td>
+<td><code>string</code></td>
+<td>Human-readable label in the journey library.</td>
+</tr>
+<tr>
+<td><code>rules</code></td>
+<td>Yes</td>
+<td><code>object</code></td>
+<td>Opens and constrains the walk.</td>
+</tr>
+<tr>
+<td><code>nodes</code></td>
+<td>Yes</td>
+<td><code>Record&lt;string, JourneyNode&gt;</code></td>
+<td>The complete content and choice graph.</td>
+</tr>
+<tr>
+<td><code>recording</code></td>
+<td>No</td>
+<td><code>object</code></td>
+<td>The last recorded walk. Runtime-managed; normally omit it when authoring.</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Rules</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td>Yes</td>
+<td>, </td>
+<td>ID of the opening node; it must exist in <code>nodes</code>.</td>
+</tr>
+<tr>
+<td><code>maxDepth</code></td>
+<td>No</td>
+<td><code>12</code></td>
+<td>Maximum number of nodes in an active path. Reaching it ends the walk even if choices remain.</td>
+</tr>
+<tr>
+<td><code>allowRewind</code></td>
+<td>No</td>
+<td><code>true</code></td>
+<td>Enables the visitor to step back through the chosen path.</td>
+</tr>
+<tr>
+<td><code>allowReplay</code></td>
+<td>No</td>
+<td><code>true</code></td>
+<td>Enables recorded transitions and saved traces to replay.</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Node</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>short</code></td>
+<td>Yes</td>
+<td><code>string</code></td>
+<td>Compact label used in the path trail and saved traces. Two or three words works best.</td>
+</tr>
+<tr>
+<td><code>pose</code></td>
+<td>Yes</td>
+<td><code>PoseSpec</code></td>
+<td>Named glass pose plus optional per-channel overrides.</td>
+</tr>
+<tr>
+<td><code>beat</code></td>
+<td>Yes</td>
+<td><code>StoryBeat</code> object</td>
+<td>Everything the visitor sees in this section. <code>index</code> and <code>id</code> are supplied by the journey runtime.</td>
+</tr>
+<tr>
+<td><code>prompt</code></td>
+<td>No</td>
+<td><code>string</code></td>
+<td>Question shown at the active choice point.</td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td>No</td>
+<td><code>{ label, to }[]</code></td>
+<td>Legal outgoing edges. A node without choices is an ending.</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Choices and branching</h4>
+<pre>{
+  "prompt": "What matters most?",
+  "choices": [
+    {
+      "label": "Lower cost",
+      "to": "cost"
+    },
+    {
+      "label": "Stronger proof",
+      "to": "proof"
+    }
+  ]
+}</pre>
+<p>Every <code>to</code> value must name an existing node. Paths restored from URLs or saved traces are accepted only when:</p>
+<ol>
+<li>the first ID equals <code>rules.start</code>;</li>
+<li>every ID exists;</li>
+<li>every transition is an actual choice from the previous node; and</li>
+<li>path length does not exceed <code>maxDepth</code>.</li>
+</ol>
+<p>This fails closed: stale or edited links do not crash the page or jump across illegal edges.</p>
+<h4>Recording</h4>
+<p>During a walk, the runtime records transitions as full path snapshots:</p>
+<pre>{
+  "recording": {
+    "journey": "launch-story",
+    "startedAt": 1784992298061,
+    "events": [
+      {
+        "at": 1784992298061,
+        "kind": "start",
+        "node": "intro",
+        "path": ["intro"]
+      },
+      {
+        "at": 1784992302123,
+        "kind": "choose",
+        "label": "Show me the proof",
+        "node": "proof",
+        "path": ["intro", "proof"]
+      }
+    ]
+  }
+}</pre>
+<p>Event kinds are <code>start</code>, <code>choose</code>, <code>rewind</code>, <code>loop</code>, and <code>replay</code>. Recordings always persist to <code>localStorage</code>; in development they are also written into the journey JSON. Re-saving a definition without a <code>recording</code> key preserves an existing recording in the file.</p>
+<h3>Story beat reference</h3>
+<p>The JSON node’s <code>beat</code> object uses the same vocabulary as <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/story/types.ts" target="_blank" rel="noopener"><code>BeatData</code></a>, minus runtime-supplied <code>index</code> and <code>id</code>.</p>
+<h4>Core fields</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Values</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>layout</code></td>
+<td>Yes</td>
+<td><code>"center"</code>, <code>"left"</code>, <code>"right"</code></td>
+<td>Places the copy relative to the glass.</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>Yes</td>
+<td>Exactly two strings</td>
+<td>Two separately revealed headline lines.</td>
+</tr>
+<tr>
+<td><code>glass</code></td>
+<td>No</td>
+<td><code>0</code> or <code>1</code></td>
+<td>Renders the first or second title line as translucent glass type.</td>
+</tr>
+<tr>
+<td><code>marker</code></td>
+<td>No</td>
+<td><code>string</code></td>
+<td>Mono chapter label with a spectrum chip and rule.</td>
+</tr>
+<tr>
+<td><code>lede</code></td>
+<td>No</td>
+<td><code>string</code></td>
+<td>Supporting paragraph under the headline.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td>No</td>
+<td><code>{ title, note }[]</code></td>
+<td>Open numbered rows separated by hairlines.</td>
+</tr>
+<tr>
+<td><code>panelRows</code></td>
+<td>No</td>
+<td><code>{ title, note }[]</code></td>
+<td>Numbered rows inside one bordered glass panel.</td>
+</tr>
+<tr>
+<td><code>tiles</code></td>
+<td>No</td>
+<td><code>{ label, body }[]</code></td>
+<td>Stacked labeled tiles inside a panel grid.</td>
+</tr>
+<tr>
+<td><code>code</code></td>
+<td>No</td>
+<td><code>string</code></td>
+<td>Preformatted mono panel. Use <code>\n</code> for line breaks in JSON.</td>
+</tr>
+<tr>
+<td><code>caption</code></td>
+<td>No</td>
+<td><code>string</code></td>
+<td>Small mono note below the primary content.</td>
+</tr>
+<tr>
+<td><code>links</code></td>
+<td>No</td>
+<td><code>{ href, label, tone? }[]</code></td>
+<td>Solid or ghost calls to action. Non-journey destinations open in a new tab while walking a journey.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The renderer can display several content blocks together, but one primary structure per beat, <code>rows</code>, <code>panelRows</code>, or <code>tiles</code>, usually produces the cleanest rhythm.</p>
+<h4>Rows</h4>
+<pre>{
+  "rows": [
+    {
+      "title": "Capture before.",
+      "note": "Snapshot the state that exists before work starts."
+    },
+    {
+      "title": "Verify after.",
+      "note": "Score the changed world, not the agent's own summary."
+    }
+  ]
+}</pre>
+<h4>Panel rows</h4>
+<pre>{
+  "panelRows": [
+    {
+      "title": "Dolly with z.",
+      "note": "Positive z approaches the camera; negative z recedes."
+    },
+    {
+      "title": "Change attitude with tilt.",
+      "note": "tiltX and tiltZ are absolute targets."
+    }
+  ]
+}</pre>
+<h4>Tiles, code, caption, and links</h4>
+<pre>{
+  "tiles": [
+    {
+      "label": "Pose",
+      "body": "x, y, z, scale, spin, tiltX, and tiltZ."
+    },
+    {
+      "label": "Optics",
+      "body": "chroma, thickness, distortion, aniso, rough, and ior."
+    }
+  ],
+  "code": "Q = V * B\ncost = tokens + compute + human minutes",
+  "caption": "The worker's testimony never enters the ledger.",
+  "links": [
+    {
+      "href": "/research/the-quirq-calculus",
+      "label": "Read the calculus"
+    },
+    {
+      "href": "/quirq-whitepaper.pdf",
+      "label": "Whitepaper",
+      "tone": "ghost"
+    }
+  ]
+}</pre>
+<h4>Layout guidance</h4>
+<ul>
+<li>Use <code>center</code> for openings, major reveals, and endings.</li>
+<li>Use <code>left</code> when the glass is staged to the right or the copy needs more scan depth.</li>
+<li>Use <code>right</code> when the pose moves left or a bright spectrum moment should remain visible.</li>
+<li>Keep titles to two deliberate lines; the renderer and reveal timing are built around that tuple.</li>
+<li>Keep each beat close to one viewport. The runtime measures actual centres, but the visual peak still reads best when sections have similar narrative weight.</li>
+<li>Content over live 3D should remain inside <code>GlassPool</code> or carry a <code>TextScrim</code>. <code>StoryBeat</code> handles this automatically.</li>
+</ul>
+<h3>Scene and glass customization</h3>
+<h4>Named poses</h4>
+<p>A journey pose begins with one of five authored presets:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>JSON value</th>
+<th>Source beat</th>
+<th>Visual intention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"centre"</code></td>
+<td>Hero</td>
+<td>Centred, breathing, balanced spectrum.</td>
+</tr>
+<tr>
+<td><code>"drained"</code></td>
+<td>Consumption</td>
+<td>Right-shifted, rougher, murkier, nearly monochrome.</td>
+</tr>
+<tr>
+<td><code>"flooded"</code></td>
+<td>Delivery</td>
+<td>Left-shifted, highly chromatic, clear, bright.</td>
+</tr>
+<tr>
+<td><code>"recede"</code></td>
+<td>Ledger</td>
+<td>Smaller and far upstage so numbers own the frame.</td>
+</tr>
+<tr>
+<td><code>"finale"</code></td>
+<td>Invite</td>
+<td>Returns to centre, largest and fully lit.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The spelling is intentionally <code>"centre"</code>.</p>
+<h4>Pose inheritance</h4>
+<p>Use a preset unchanged:</p>
+<pre>{
+  "pose": {
+    "base": "flooded"
+  }
+}</pre>
+<p>Or override only what differs:</p>
+<pre>{
+  "pose": {
+    "base": "flooded",
+    "tweaks": {
+      "x": -1.4,
+      "z": 0.8,
+      "spin": 0.24,
+      "chroma": 1.1,
+      "burst": 0.82
+    }
+  }
+}</pre>
+<p><code>resolvePose</code> spreads the partial <code>tweaks</code> object over the complete preset, so omitted channels remain valid.</p>
+<h4>All 14 channels</h4>
+<p>The ranges below are the live editor’s authored ranges, not hard physical limits.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Channel</th>
+<th>Editor range</th>
+<th>What it changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Position</td>
+<td><code>x</code></td>
+<td><code>-4</code> → <code>4</code></td>
+<td>Horizontal subject position. Narrow viewports automatically collapse this toward centre.</td>
+</tr>
+<tr>
+<td>Position</td>
+<td><code>y</code></td>
+<td><code>-2</code> → <code>2</code></td>
+<td>Vertical subject position.</td>
+</tr>
+<tr>
+<td>Position</td>
+<td><code>z</code></td>
+<td><code>-4</code> → <code>3</code></td>
+<td>Apparent dolly: positive approaches; negative recedes.</td>
+</tr>
+<tr>
+<td>Position</td>
+<td><code>scale</code></td>
+<td><code>0.5</code> → <code>1.8</code></td>
+<td>Subject size without changing camera perspective.</td>
+</tr>
+<tr>
+<td>Attitude</td>
+<td><code>spin</code></td>
+<td><code>0</code> → <code>0.3</code></td>
+<td>Continuous Y-axis rotation rate in radians per second.</td>
+</tr>
+<tr>
+<td>Attitude</td>
+<td><code>tiltX</code></td>
+<td><code>-0.5</code> → <code>1.5</code></td>
+<td>Absolute pitch target.</td>
+</tr>
+<tr>
+<td>Attitude</td>
+<td><code>tiltZ</code></td>
+<td><code>-0.8</code> → <code>0.8</code></td>
+<td>Absolute roll target.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>chroma</code></td>
+<td><code>0</code> → <code>1.4</code></td>
+<td>RGB separation; the primary “color equals value” control.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>thickness</code></td>
+<td><code>0.3</code> → <code>3</code></td>
+<td>Refraction depth through the transmission material.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>distortion</code></td>
+<td><code>0</code> → <code>1</code></td>
+<td>Surface distortion strength.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>aniso</code></td>
+<td><code>0</code> → <code>0.8</code></td>
+<td>Directional blur inside the glass.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>rough</code></td>
+<td><code>0</code> → <code>0.4</code></td>
+<td>Surface roughness; higher values soften reflections.</td>
+</tr>
+<tr>
+<td>Optics</td>
+<td><code>ior</code></td>
+<td><code>1.1</code> → <code>1.9</code></td>
+<td>Index of refraction.</td>
+</tr>
+<tr>
+<td>Light</td>
+<td><code>burst</code></td>
+<td><code>0.1</code> → <code>1</code></td>
+<td>Per-beat intensity before the global lighting gain.</td>
+</tr>
+</tbody>
+</table></div>
+<p>All channels interpolate with a smoothstep curve and then approach their target with frame-rate-independent damping. That is why even large JSON changes arrive as camera movement rather than cuts.</p>
+<h4>Global brightness</h4>
+<p>Change one line in <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/lighting.ts" target="_blank" rel="noopener"><code>lib/lighting.ts</code></a>:</p>
+<pre>export const LIGHTING: LightingPreset = "max";</pre>
+<p>Available presets:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Character</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max</code></td>
+<td>Brightest usable scene with the strongest text scrims.</td>
+</tr>
+<tr>
+<td><code>draft</code></td>
+<td>Hot core and long rays.</td>
+</tr>
+<tr>
+<td><code>mid</code></td>
+<td>Similar brightness with a tighter falloff.</td>
+</tr>
+<tr>
+<td><code>soft</code></td>
+<td>Dimmest, calmest, and most copy-forward.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The preset couples burst gain, shader core, rays, halo, bloom, environment intensity, backside intensity, and text scrim strength. Change the preset instead of tuning those call sites independently.</p>
+<h4>Choreography tree</h4>
+<p>Published linear stage pages use <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/choreo-tree.ts" target="_blank" rel="noopener"><code>CHOREOGRAPHY</code></a>. The tree:</p>
+<ol>
+<li>starts from a complete root keyframe;</li>
+<li>cascades partial overrides down the hierarchy;</li>
+<li>prunes nodes whose <code>when</code> predicate fails;</li>
+<li>flattens remaining leaves depth-first; and</li>
+<li>keeps leaf IDs for safe section-to-pose binding.</li>
+</ol>
+<p>Example responsive branch:</p>
+<pre>const branch = {
+  id: "detail",
+  when: ({ width }: { width: number }) =&gt; width &gt;= 900,
+  keyframe: {
+    x: 2.2,
+    scale: 1.05,
+  },
+};</pre>
+<p>The resolver runs on mount and resize, never per frame.</p>
+<h4>Ribbon geometry</h4>
+<p>Edit defaults in <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/ribbon-geometry.ts" target="_blank" rel="noopener"><code>components/stage/ribbon-geometry.ts</code></a>:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>radius</code></td>
+<td><code>2.2</code></td>
+<td>Radius of the closed loop.</td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td><code>0.6</code></td>
+<td>Width of the broad refracting face.</td>
+</tr>
+<tr>
+<td><code>thickness</code></td>
+<td><code>0.22</code></td>
+<td>Physical mesh depth, separate from material refraction thickness.</td>
+</tr>
+<tr>
+<td><code>segments</code></td>
+<td><code>512</code></td>
+<td>Smoothness around the loop.</td>
+</tr>
+<tr>
+<td><code>twists</code></td>
+<td><code>2</code></td>
+<td>Whole cross-section rotations; integers close the seam.</td>
+</tr>
+<tr>
+<td><code>wave</code></td>
+<td><code>0.5</code></td>
+<td>Vertical saddle amplitude.</td>
+</tr>
+<tr>
+<td><code>waveFreq</code></td>
+<td><code>2</code></td>
+<td>Vertical oscillations per revolution.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The mesh is built as four separate quad strips so long edges stay crisp and throw sharp caustics.</p>
+<h4>Camera and environment</h4>
+<ul>
+<li>Camera: <code>[0, 0, 9]</code>, field of view <code>38</code> in <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/scene.tsx" target="_blank" rel="noopener"><code>scene.tsx</code></a>.</li>
+<li>Spectrum emitters: <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/spectrum-env.tsx" target="_blank" rel="noopener"><code>spectrum-env.tsx</code></a>.</li>
+<li>Shader burst and parallax: <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/light-burst.tsx" target="_blank" rel="noopener"><code>light-burst.tsx</code></a>.</li>
+<li>Transmission material: <a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/stage/glass-form.tsx" target="_blank" rel="noopener"><code>glass-form.tsx</code></a>.</li>
+<li>Seven brand colors: <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/spectrum.ts" target="_blank" rel="noopener"><code>lib/spectrum.ts</code></a>.</li>
+</ul>
+<p>The camera is intentionally fixed. Apparent truck, pedestal, dolly, zoom, and attitude changes come from moving the subject, keeping DOM copy, scrims, and the 3D stage spatially coherent.</p>
+<h3>Brand, content, and UI customization</h3>
+<h4>Customization map</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>What to change</th>
+<th>File</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Site name, description, canonical URL, social metadata</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/layout.tsx" target="_blank" rel="noopener"><code>app/layout.tsx</code></a></td>
+<td>Update <code>metadataBase</code>, titles, descriptions, Open Graph, and Twitter fields together.</td>
+</tr>
+<tr>
+<td>Fonts</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/layout.tsx" target="_blank" rel="noopener"><code>app/layout.tsx</code></a></td>
+<td>Poppins is the mark, Inter is reading text, JetBrains Mono is metered/system copy.</td>
+</tr>
+<tr>
+<td>Core colors, typography scale, grain, vignette</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/globals.css" target="_blank" rel="noopener"><code>app/globals.css</code></a></td>
+<td>Tailwind 4 tokens live in <code>@theme</code>; the CSS spectrum is also defined here.</td>
+</tr>
+<tr>
+<td>Runtime spectrum emitters</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/spectrum.ts" target="_blank" rel="noopener"><code>lib/spectrum.ts</code></a></td>
+<td>Keep this seven-color array synchronized with the CSS <code>--spectrum</code> gradient.</td>
+</tr>
+<tr>
+<td>Global scene brightness</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/lighting.ts" target="_blank" rel="noopener"><code>lib/lighting.ts</code></a></td>
+<td>Prefer the four presets.</td>
+</tr>
+<tr>
+<td>Home narrative and CTA sections</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/beats" target="_blank" rel="noopener"><code>components/beats</code></a></td>
+<td>Bespoke React composition.</td>
+</tr>
+<tr>
+<td>Data-driven page narrative</td>
+<td>Any <code>app/*/story.ts</code></td>
+<td>Plain <code>BeatData[]</code>, mapped through <code>StoryBeat</code>.</td>
+</tr>
+<tr>
+<td>Branching/generated pages</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/.quirq/journeys" target="_blank" rel="noopener"><code>.quirq/journeys</code></a></td>
+<td>One transferable JSON document per journey.</td>
+</tr>
+<tr>
+<td>Navigation links and active-route rules</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/ui/nav.tsx" target="_blank" rel="noopener"><code>components/ui/nav.tsx</code></a></td>
+<td>Add stage routes to <code>onStage</code> so nav timing and treatment stay correct.</td>
+</tr>
+<tr>
+<td>Early-access email and agent handoff targets</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/ui/open-in.tsx" target="_blank" rel="noopener"><code>components/ui/open-in.tsx</code></a></td>
+<td>Update <code>MAIL</code>, <code>PROMPT</code>, and <code>TARGETS</code>.</td>
+</tr>
+<tr>
+<td>Footer</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/components/ui/footer.tsx" target="_blank" rel="noopener"><code>components/ui/footer.tsx</code></a></td>
+<td>Shared across long-form routes.</td>
+</tr>
+<tr>
+<td>Research posts</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/research.ts" target="_blank" rel="noopener"><code>lib/research.ts</code></a></td>
+<td>Add one typed object; index and static params update automatically.</td>
+</tr>
+<tr>
+<td>Favicon and social art</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/assets" target="_blank" rel="noopener"><code>public/assets</code></a></td>
+<td>Metadata currently expects <code>favicon.svg</code>, <code>quirq-mark.jpg</code>, and <code>og.jpg</code>.</td>
+</tr>
+<tr>
+<td>Whitepaper files</td>
+<td><a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/quirq-whitepaper.pdf" target="_blank" rel="noopener"><code>public/quirq-whitepaper.pdf</code></a>, <a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/llm.txt" target="_blank" rel="noopener"><code>public/llm.txt</code></a></td>
+<td>Keep human- and machine-readable versions aligned.</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Research content</h4>
+<p>Research blocks support:</p>
+<ul>
+<li><code>h2</code></li>
+<li><code>h3</code></li>
+<li><code>p</code></li>
+<li><code>quote</code></li>
+<li><code>code</code></li>
+<li><code>table</code></li>
+<li><code>list</code></li>
+</ul>
+<p>Add a new object to <code>POSTS</code> in <a href="https://github.com/quirq-ai/quirq_ai/blob/main/lib/research.ts" target="_blank" rel="noopener"><code>lib/research.ts</code></a>. <code>generateStaticParams</code> creates the route automatically, and the index reads from the same source.</p>
+<h4>Navigation</h4>
+<p>When adding a new stage page:</p>
+<ol>
+<li>render it inside <code>StagePage</code>;</li>
+<li>add its path to <code>onStage</code> in <code>Nav</code>;</li>
+<li>use the <code>Beat</code> primitive or <code>StoryBeat</code>;</li>
+<li>ensure its section IDs align with choreography leaf IDs when using conditional branches; and</li>
+<li>add a footer base gradient if the final glass pose would sit behind footer copy.</li>
+</ol>
+<h4>Static assets</h4>
+<p>Anything under <code>public</code> is served from <code>/</code>:</p>
+<pre><code>public/assets/og.jpg     → /assets/og.jpg
+public/llm.txt           → /llm.txt
+public/quirq-whitepaper.pdf → /quirq-whitepaper.pdf
+</code></pre>
+<p>Use optimized production formats and keep social images at a platform-friendly aspect ratio. The README banner is <a href="https://github.com/quirq-ai/quirq_ai/blob/main/public/assets/readme-banner.png" target="_blank" rel="noopener"><code>public/assets/readme-banner.png</code></a>.</p>
+<h3>Runtime, performance, and accessibility</h3>
+<h4>Performance behavior</h4>
+<ul>
+<li>Three.js, drei, and the shaders are dynamically imported with <code>ssr: false</code>.</li>
+<li>The static page and typography paint before WebGL is ready.</li>
+<li>Small viewports or machines with four or fewer logical cores use:
+<ul>
+<li><code>3</code> transmission samples;</li>
+<li><code>256</code> environment resolution; and</li>
+<li>no backside refraction.</li>
+</ul>
+</li>
+<li>Larger machines use:
+<ul>
+<li><code>8</code> samples;</li>
+<li><code>512</code> environment resolution; and</li>
+<li>backside refraction.</li>
+</ul>
+</li>
+<li>Environment lights bake once with <code>frames={1}</code>.</li>
+<li>The per-frame sampler reuses objects and iterates a static exhaustive channel list.</li>
+<li>The glass geometry is created once and disposed on unmount.</li>
+</ul>
+<h4>Responsive behavior</h4>
+<ul>
+<li>Horizontal choreography collapses toward centre on narrow aspect ratios.</li>
+<li>Scale receives an automatic mobile fit factor.</li>
+<li>Beat centres are measured from real DOM geometry, not assumed <code>100vh</code> multiples.</li>
+<li>Font loading, resize, beat registration, addition, removal, and reordering all trigger re-measurement.</li>
+</ul>
+<h4>Reduced motion</h4>
+<p>When <code>prefers-reduced-motion: reduce</code> is active:</p>
+<ul>
+<li>Lenis is skipped in favor of native scrolling.</li>
+<li>Stage damping effectively snaps to targets.</li>
+<li>Pointer parallax, breathing, and sway are disabled.</li>
+<li>Motion’s provider respects the user preference.</li>
+</ul>
+<h4>No WebGL and no JavaScript</h4>
+<ul>
+<li>Without WebGL, the live scene falls back to <code>/assets/mobius.jpg</code>.</li>
+<li>Without JavaScript, the layout’s <code>&lt;noscript&gt;</code> styles remove initial animation opacity and transforms so content remains readable.</li>
+<li>The nonfunctional agent-menu chevron is hidden without JavaScript while its email action remains usable.</li>
+</ul>
+<h4>Readability and keyboard behavior</h4>
+<ul>
+<li>Text over the live stage uses local scrims instead of a frame-wide opaque layer.</li>
+<li>Small faint text is set to meet AA contrast on black.</li>
+<li>Focus-visible rings are globally defined, with an inverse treatment for ink-filled controls.</li>
+<li>Scrollable code and table regions are keyboard-focusable.</li>
+<li>External links announce that they open in a new tab.</li>
+</ul>
+<h3>Validation and golden testing</h3>
+<h4>Journey validation</h4>
+<p><a href="https://github.com/quirq-ai/quirq_ai/blob/main/app/journey/defs.tsx" target="_blank" rel="noopener"><code>validateDefinition</code></a> checks:</p>
+<ul>
+<li>the definition is an object;</li>
+<li>the slug is valid;</li>
+<li>a name and nodes map exist;</li>
+<li><code>rules.start</code> names a node;</li>
+<li>every node has <code>short</code>, a title, and a known pose; and</li>
+<li>every choice target exists.</li>
+</ul>
+<p>The loader validates again on the client before resolving the definition.</p>
+<h4>Type and production checks</h4>
+<pre>pnpm build</pre>
+<p>The Next.js build performs TypeScript checking and route generation. There is currently no standalone <code>lint</code> or unit-test script in <code>package.json</code>.</p>
+<h4>Golden choreography capture</h4>
+<p>In development, stage pages expose:</p>
+<pre>const capture = await window.__golden(21);</pre>
+<p>The harness records:</p>
+<ul>
+<li>measured section centres;</li>
+<li>fractional <code>stage.beat</code> at 21 scroll stops; and</li>
+<li>all 14 sampled channels at each stop.</li>
+</ul>
+<p>Baselines live under <a href="https://github.com/quirq-ai/quirq_ai/blob/main/docs/goldens" target="_blank" rel="noopener"><code>docs/goldens</code></a>. The intended migration gate is exact zero delta, not visual approximation. This protects the shot while internals such as the registry or choreography tree change.</p>
+<h3>Production notes</h3>
+<ul>
+<li>The standard production path is <code>pnpm build</code> followed by <code>pnpm start</code>, or a Vercel Next.js deployment.</li>
+<li>Keep the project root pointed at the directory containing this <code>package.json</code>, <code>app</code>, and <code>next.config.ts</code>.</li>
+<li>Do not set a custom static output directory; this is a Next.js application with route handlers, not an exported <code>dist</code> folder.</li>
+<li>Journey reads are runtime route-handler operations.</li>
+<li>Journey writes and recording writes return <code>405</code> outside development. To publish a new journey, add its JSON file to the repository and deploy it with the application.</li>
+<li>There are no required secrets or server environment variables.</li>
+</ul>
+<h3>Design invariants</h3>
+<p>These rules are load-bearing:</p>
+<ol>
+<li><strong>One glass object, never remounted between beats.</strong></li>
+<li><strong>Registered sections drive the stage; an unregistered section is not a beat.</strong></li>
+<li><strong>Beat IDs are identity, especially when choreography branches can be pruned.</strong></li>
+<li><strong>Brightness changes through the coupled lighting preset.</strong></li>
+<li><strong>Text over live 3D carries a <code>GlassPool</code> or <code>TextScrim</code>.</strong></li>
+<li><strong>Fixed, complete geometry beats clipped marquees and sliced grids.</strong></li>
+<li><strong>Sections stay close to one viewport of narrative weight.</strong></li>
+<li><strong>Reduced-motion, no-WebGL, and no-JavaScript paths stay usable.</strong></li>
+<li><strong>The hot frame loop remains allocation-free and outside React state.</strong></li>
+<li><strong>Refactors of the shot are golden-captured and compared.</strong></li>
+</ol>
+<hr>
+<p>
+  <strong>One shell. One ribbon. Infinite middles.</strong>
+  <br>
+  Start with <a href="http://localhost:3000/editor" target="_blank" rel="noopener"><code>/editor</code></a>,
+  export a journey, and let one JSON object become the page.
+</p>

@@ -1,0 +1,283 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo keeps
+<code>main</code> green in every onboarded repo, as an agent plus a small service: it watches the post-submit
+run on every main commit, publishes a tree status, groups failures by regression range, bisects
+them to a culprit and opens clean reverts within the caps in infra-config's <code>auto_revert.toml</code>.
+Today it reports only: the tree status is live, but its GitHub App does not exist yet, so it opens
+no revert and none lands on its own (see "v0 status").</p>
+<p><strong>Chromium counterpart:</strong> the gardener (sheriff) rotations, Sheriff-o-Matic (failure grouping by
+regression range) and LUCI Bisection (culprit finding and auto-revert with daily caps), plus the
+tree closers.</p>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>Rules it lives by</h3>
+<ul>
+<li>Every cap is read from infra-config (<code>auto_revert.toml</code>) at the commit pinned in <code>pins.toml</code>,
+never hard-coded. Changing a cap is a policy change for suraj.</li>
+<li>infra-config generates the post-submit builders; the gardener consumes their results, through
+<a href="https://github.com/quirq-ai/test-pipelines" target="_blank" rel="noopener">test-pipelines</a> and the backend.</li>
+<li>GitHub-specific code sits behind the <code>backend</code> field (<code>github</code> now, <code>launchpad</code> later).</li>
+<li>Agents land clean build-break reverts alone, within the caps. Test-failure reverts are proposed
+only. Reverts in every onboarded repo (xo-space, innernet, website and xo) go to suraj to merge
+during v0.</li>
+</ul>
+<h3>Tree status and red detection (V0-GAR-01)</h3>
+<p>infra-config generates a post-submit builder for each onboarded repo (<code>pipelines.toml</code>, pipeline
+<code>postsubmit</code>, trigger <code>land</code>, <code>cancel_in_progress = false</code>) and delivers it as
+<code>.github/workflows/qq-&lt;builder&gt;.yml</code>. The gardener reads each repo's first-parent <code>main</code> history
+and those runs, and works out:</p>
+<ul>
+<li><strong>a state per commit and builder</strong>: green, red, pending (running, or landed under 15 minutes
+ago; a commit dated in the future is not pending, so it cannot hide), missing (no run), or
+cancelled (ended without a verdict). Only a real failure is red; a re-run replaces its first
+attempt, and while a re-run is in progress the commit keeps its last verdict, so re-running a
+red head never opens the tree.</li>
+<li><strong>the tree status per repo</strong>: <code>closed</code> while any post-submit builder's newest verdict is red,
+<code>open</code> when all are green, <code>unknown</code> while a builder has no verdict yet. A missing signal is not
+a healthy one. <code>green</code> names the newest commit every builder passed on.</li>
+<li><strong>red detection</strong>: for each red builder, its regression range (last green .. first red) and the
+suspects in it, oldest first. V0-GAR-02 bisects these.</li>
+<li><strong>coverage</strong>: every main commit since the repo's first post-submit run must have a result (a repo with
+no run yet is a warning: it is not onboarded). A
+missing or cancelled one is a hole a culprit can hide in, and fails the check.</li>
+<li><strong>backfill</strong>: a push of several commits runs only the newest, so the gardener's cycle fills each
+hole by dispatching that builder's workflow with the commit (infra-config's <code>commit</code> input),
+oldest first, with at most 10 in flight per repo. A dispatched run's head is the branch tip, so
+it is matched by its run-name, <code>&lt;builder&gt; &lt;commit&gt;</code>, and counts only when it ran from a <code>main</code>
+commit at or after the one it names (checked in the backend, so every reader gets it). It only
+fills a hole: a push run's verdict always wins over a backfill's. A dispatch run from the commit
+itself stands in for a push run only when there is none (or it was cancelled). A backfill runs main's newer workflow on the older commit,
+so a red backfill never names a culprit by itself: the cycle asks for a bisection. A hole whose
+backfill was cancelled too is left for a person, and re-running its push run clears it.
+Dispatching needs the bot identity. Until the App exists nothing is dispatched, so a hole keeps
+the check red until a person runs that builder's workflow (<code>qq &lt;builder&gt;</code>, Run workflow) on
+<code>main</code> with the commit.</li>
+</ul>
+<pre>qqgarden status --config &lt;infra-config checkout&gt;                 # live, github backend
+qqgarden status --config ... --out status/ --require-coverage    # what the workflow runs
+qqgarden status --config ... --backend snapshot --snapshot tests/fixtures/every-commit.json</pre>
+<p>The <code>tree-status</code> workflow runs it every 5 minutes and publishes <code>status/&lt;repo&gt;.json</code> (schema
+<code>qq-tree-status/1</code>) and <code>status/README.md</code> to this repo's <code>tree-status</code> branch, committing only
+when something changes, so that branch's <code>tree-status:</code> commits are the tree's open and close
+history (its <code>groups:</code> commits, below, name no repo state; a quiet branch
+is not a stalled gardener: the workflow's run list shows each check). GitHub fires cron schedules
+best-effort, so each run on main dispatches the next one about 5 minutes later; the cron only
+restarts that chain if it stops. Setting the repo variable <code>QQ_TREE_STATUS_CHAIN</code> to <code>off</code> stops the
+chain without a code change. Runs that a newer one replaced in the queue show as cancelled in the
+run list; that is expected. People, the
+gate in v1 and the gardener agent read that branch. release's <code>lkgr</code> advancer does not: it
+recomputes the verdicts itself by importing qqgarden at its own pinned commit.</p>
+<h3>Grouping and bisection (V0-GAR-02)</h3>
+<p><code>qqgarden groups</code> turns the red builders of each repo into failure groups, one per regression
+range (Sheriff-o-Matic's grouping): builders that went red over the same last-good..first-bad
+range share one culprit search. Each group says what failed, because the revert caps differ by
+failure type:</p>
+<ul>
+<li><code>build</code> when a <code>build (...)</code> step failed (generated builders name each step after its
+capability), <code>test</code> when a <code>test (...)</code> step failed, <code>infra</code> when anything else failed (a
+<code>fetch (...)</code> step, the result sink, the runner), else <code>unknown</code>. <code>infra</code> and <code>unknown</code> are
+never reverted. The results store's unexpected tests are shown, but never change the type until
+test-pipelines checks where each record came from;</li>
+<li>the failing tests, read from test-pipelines' results store (<code>--store</code>, a checkout of its
+<code>results</code> branch).</li>
+</ul>
+<p><code>qqgarden bisect</code> finds the culprit in a range by binary search, probing each commit with a
+command in a scratch worktree (exit 0 pass, 125 can't tell, anything else fail, as with
+<code>git bisect run</code>). For a qq repo the command is depot's <code>qq build</code> or <code>qq test</code>. Commits it can't
+tell are skipped. With <code>require_culprit_verification</code> (auto_revert.toml) the culprit is probed
+again and its parent once more, so a flaky probe can't name a culprit. A range of one suspect
+still gets verified.</p>
+<p>The tree-status job also publishes the groups for the monitoring dashboard's Gardener page, as
+<code>groups/groups.json</code> (schema <code>qq-gardener-groups/1</code>) on the <code>tree-status</code> branch: per red range, its
+builders, first red runs, failure type and failed steps. It is computed from the status files the
+same run just wrote (<code>qqgarden groups --from-status</code>), never from a second look, and a range's type
+comes from its first red run's first attempt, which a re-run never changes (or, when that attempt
+shows no failed step, the newest completed attempt that does), so it can differ from the cycle's,
+which reads the newest attempt. A range already published with a known type is carried over without
+any read; one still <code>unknown</code> is read again. The
+step runs after the status push with a 2-minute limit and cannot fail the job; the file is replaced
+only when every read succeeded and committed only on a change, as <code>groups: N red ranges</code>, a message
+that names no repo state.</p>
+<pre>qqgarden groups --config &lt;infra-config&gt; --store &lt;results checkout&gt;
+qqgarden bisect --config &lt;infra-config&gt; --repo-dir &lt;clone&gt; --good &lt;sha&gt; --bad &lt;sha&gt; --run 'qq test'
+qqgarden groups --config &lt;infra-config&gt; --from-status status/ --previous groups/groups.json --out groups/groups.json</pre>
+<p>Presubmit plants a break in a 12-commit repo (<code>tools/plant-break.sh</code>) and checks that bisection
+names it, verified.</p>
+<p>TODO(expert): a probe that re-runs the repo's own post-submit builder on a commit. infra-config's
+generated post-submit now accepts a <code>commit</code> input (the backfill dispatch above).</p>
+<h3>Auto-revert within caps (V0-GAR-03)</h3>
+<p><code>qqgarden cycle</code> runs every 5 minutes (the <code>cycle</code> job of the <code>tree-status</code> workflow). For each
+failure group it finds a culprit, and reverts it if the caps allow:</p>
+<ul>
+<li>
+<p><strong>Culprit.</strong> A range of one commit (its parent is green) names it. It must be verified
+(<code>require_culprit_verification</code>) with and without it, for every builder in the group: the
+culprit's own post-submit run is red on its last two attempts and was never green, and its
+parent's is green on its last two and was never red, the last of them started after the
+culprit first failed. A later red commit proves nothing (it may
+be another break). Until then the cycle re-runs the culprit's failed jobs and the parent's whole
+run and waits; after 3 attempts without that, a person looks. A group that errors, or a revert branch left without a
+PR ("stuck", for a person), never stops the rest of the cycle. A longer range needs <code>qqgarden bisect</code>,
+which runs the repo's code, so the cycle leaves it to the gardener agent, which then runs
+<code>qqgarden revert --culprit &lt;sha&gt; --bisect-json &lt;bisect --json output&gt; --ledger &lt;ledger worktree&gt; --publish-ledger ledger</code>, for bisected ranges only: a one-commit range is the cycle's, verified on
+GitHub's runs, unless its first red is a backfill, which the cycle sends to bisection. That path keeps the cycle's rules: the culprit must be a suspect of a
+red range now, the failure type comes from that range's runs, the bisection must name this
+culprit verified (a failing probe of it and a passing probe of its first parent), and the caps
+are counted on the freshly pulled shared ledger, a worktree of this repo. The bisection itself
+stays attested by the agent that ran it, whose probe command it chose.</p>
+</li>
+<li>
+<p><strong>After a revert.</strong> Once a revert is on main and the group is still red on it or later, a
+person looks ("still red after its revert"): another break may hide behind the first. The
+gardener never reverts its own revert (<code>Revert &lt;sha12&gt; (qq gardener)</code>).</p>
+</li>
+<li>
+<p><strong>Evidence.</strong> Only GitHub's own data decides: this repo's <code>push</code> runs of the generated
+<code>qq-&lt;builder&gt;.yml</code> and their failed step names. Stored test verdicts are shown but never change
+a failure's type until test-pipelines checks where each record came from.</p>
+</li>
+<li>
+<p><strong>Caps</strong>, all from infra-config's <code>auto_revert.toml</code> and none in code: at most <code>daily_cap</code> (10)
+reverts created per rolling <code>window_hours</code> (24) across all repos and failure types, counting
+every created revert, proposed or landed (suraj can change that default). Beneath it, per type,
+<code>create_daily_limit</code>, <code>submit_daily_limit</code> and <code>max_culprit_age_hours</code>: build breaks land on
+their own at most 4 a day and only for culprits under 6 h old; test failures are proposed only
+(submit limit 0). An <code>unknown</code> failure is never reverted.</p>
+</li>
+<li>
+<p><strong>Who may auto-land.</strong> Only repos listed in <code>auto_land_repos</code> (asked of infra-config for
+CFG-05). With none, every revert is proposed: in v0, every onboarded repo's reverts go to suraj
+to merge.</p>
+</li>
+<li>
+<p><strong>Clean only.</strong> The revert is made in a scratch clone first; one that conflicts or changes
+nothing is refused and not counted.</p>
+</li>
+<li>
+<p><strong>Ledger.</strong> Each revert is reserved in the <code>ledger</code> branch (write-once <code>reverts/&lt;id&gt;.json</code>),
+pushed before its branch and PR exist, so a run that dies midway has still counted it. If
+another writer pushed first, the decision is re-made on the merged ledger before it counts. The cap
+counts the gardener's own records, never what a PR or commit claims about itself, and the
+gardener only ever lands a PR it opened in the same run, at the revert commit it made
+(auto-merge pinned to that head). A reservation that decided to land counts against
+<code>submit_daily_limit</code> from the moment it is written, so two racing writers cannot both take the
+last slot. A missing <code>ledger</code> branch stops the cycle once the App exists (until then it only
+reports); a person starts the first one with a manual run and <code>bootstrap-ledger</code>, which pushes
+an empty start commit. The tree-status chain would replace that queued run, so: set the repo
+variable <code>QQ_TREE_STATUS_CHAIN</code> to <code>off</code>; wait at least 5 minutes, until no tree-status run is
+in progress or queued; run the workflow with <code>bootstrap-ledger</code>; check that the run was not
+cancelled (a push or cron run can still replace it) and that the <code>ledger</code> branch exists, and run
+it again if not; then delete the variable and run the workflow once more without it to restart
+the chain.
+Gate's <code>qq-state-branches</code> ruleset blocks deletion and force pushes of <code>ledger</code> and
+<code>tree-status</code> (gate <code>settings/github.toml</code>, applied with the repo rulesets at gate <code>6610664</code>).</p>
+</li>
+<li>
+<p><strong>Titles.</strong> Revert PRs and commits are titled <code>Revert &lt;sha12&gt; (qq gardener)</code>; the culprit's own
+title appears only as inline code in the body, so it cannot mention, link or close anything.</p>
+</li>
+<li>
+<p><strong>Identity.</strong> Revert PRs, re-runs and backfills use a short-lived installation token of the
+gardener's own GitHub App, "quirq gardener" (not created yet) (one App per tool, so no other tool's key can mint
+its permissions). It needs, on the onboarded repos only:</p>
+<ul>
+<li>contents: write, to push revert branches;</li>
+<li>pull requests: write, to open revert PRs (and enable auto-merge once <code>auto_land_repos</code> allows);</li>
+<li>actions: write, to re-run a culprit's post-submit (verification) and dispatch backfills; read
+is not enough for either;</li>
+<li>metadata: read (always granted).</li>
+</ul>
+<p>The workflow mints the token for exactly the repos infra-config onboards and passes it as
+<code>QQ_GARDENER_TOKEN</code>. A PR opened with a workflow's own <code>GITHUB_TOKEN</code> starts no workflows and
+would never be gated. Without the App the cycle reports what it would do and creates nothing.
+Its secrets, <code>QQ_GARDENER_APP_CLIENT_ID</code> and <code>QQ_GARDENER_APP_PRIVATE_KEY</code>, live in this repo's
+<code>quirq-gardener</code> environment, limited to <code>main</code>, so a workflow on another branch cannot mint the
+token. The token has no <code>workflows</code> permission, so a culprit
+that changed <code>.github/workflows/</code> cannot be reverted automatically (the push is refused).</p>
+</li>
+</ul>
+<p>Presubmit shows both done-whens offline: a planted build break, red on its post-submit and on
+that run's re-run (with its parent green twice), is reverted and main is green again, 20 minutes
+after it landed; and with 10 reverts in the ledger an 11th is refused. The 30 minutes is offline
+only in v0: the test allows auto-landing for xo-space, while v0's <code>auto_land_repos</code> is empty, so
+live reverts are proposed and land when suraj merges them. With auto-landing, the time to revert
+is the post-submit run, plus up to 5 minutes for the next cycle, plus the verifying re-runs and
+the cycle after them.</p>
+<p>Next to its write tokens the workflow runs only this repo's code and qqresults from source at
+their pins, plus the hash-checked wheels in <code>requirements/runtime.lock</code>. No checkout keeps
+credentials; the job token reaches only the steps that push, scoped to this repo's URL.</p>
+<h3>Failure record and postmortem stub per revert (V0-GAR-04)</h3>
+<p>Every revert the cycle creates gets one failure record, test-pipelines' <code>Failure</code> of kind
+<code>auto-revert</code> opened through qqresults, so qq has one record format. Its id comes from the repo
+and the culprit, so a culprit never gets two records. The record links:</p>
+<ul>
+<li><code>culprit</code>: the culprit commit;</li>
+<li><code>operation</code>: the revert PR;</li>
+<li><code>postmortem</code>: a stub issue opened from infra-config's <code>templates/postmortem.md</code>, when
+<code>postmortem.toml</code>'s <code>auto-revert</code> trigger asks for one (<code>stub</code> in v0), with the trigger, repo,
+record, timeline and culprit filled in;</li>
+<li><code>fix</code>: the revert's commit, linked by a later cycle once the revert is on main, whether the
+gardener landed it or a person merged it;</li>
+<li><code>issue</code>: its labelled <code>qq-failure</code> issue mirror.</li>
+</ul>
+<p>It closes when the owner links the covering test (<code>qqresults failure link</code>), as postmortem.toml's
+<code>record_needs</code> asks. Records live in the <code>ledger</code> branch under <code>failures/</code>; issues and stubs are
+opened in this repo with the workflow's token. A security-looking record is never mirrored and
+gets no public stub. Presubmit shows the done-when offline: a planted break's revert links
+culprit, revert and fix, with one stub.</p>
+<p>Each record is mirrored only when it changed, and a revert's landing is polled for 14 days, so a
+finished record costs no API calls. A record that fails is reported as <code>record-failed</code> and never
+stops the cycle. Commit titles appear as inline code in stubs and revert PRs, so a title cannot
+mention people or add links.</p>
+<p>TODO(suraj): file stubs in the affected repo instead, which needs the bot identity there.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-GAR-01</td>
+<td>Post-submit on every commit: red detection, tree status and backfill</td>
+<td>#2, #6</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-GAR-02</td>
+<td>Group failures by regression range and bisect</td>
+<td>#3</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-GAR-03</td>
+<td>Auto-revert within caps</td>
+<td>#4</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-GAR-04</td>
+<td>Failure record and postmortem stub per revert</td>
+<td>#5</td>
+<td>merged</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every item's done-when runs offline in presubmit. The wave 4 audit's fixes (B1, B2, S1-S8) are
+merged (#8). Live today: the <code>tree-status</code> workflow publishes tree status on the <code>tree-status</code>
+branch for every repo infra-config onboards at the <code>pins.toml</code> commit (xo-space, innernet, website
+and xo since the repin to infra-config 40d8f2b), and the post-submits with the backfill input are
+delivered (xo-space #215, innernet #40, website #1, xo #58). Reverts wait on the quirq gardener
+App, which does not exist yet, and one manual run with <code>bootstrap-ledger</code> (there is no <code>ledger</code>
+branch yet). Install the App on all four repos before its secrets are set: the workflow mints its
+token for exactly the repos infra-config onboards, and that step fails if one is missing. No
+revert lands on its own until a repo is listed in <code>auto_land_repos</code>.</p>
+<p>Out of scope for v0: test-failure reverts that land, revert precision, postmortem drafting and
+canary bisection (v1); agents holding the rotation (v2).</p>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/gardener/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks with <code>python -m pytest</code>.</p>
+<h3>Licence</h3>
+<p>Apache-2.0, see <a href="https://github.com/quirq-ai/gardener/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

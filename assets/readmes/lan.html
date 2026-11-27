@@ -1,0 +1,56 @@
+<p>Private networks for developers. Create a network, invite teammates, and share a <strong>local port</strong> or a <strong>folder (read-only)</strong> with them peer-to-peer. Nothing is exposed to the internet, and every connection is identity-checked.</p>
+<pre>alice$ lan up --port web=3000 --dir assets=./build
+bob$   lan up --connect alice/web=8080 --connect alice/assets=8081
+bob$   curl localhost:8080          # → Alice's localhost:3000</pre>
+<p>Built on <a href="https://github.com/juanfont/headscale" target="_blank" rel="noopener">Headscale</a> (control plane), <a href="https://pkg.go.dev/tailscale.com/tsnet" target="_blank" rel="noopener">tsnet</a> (WireGuard inside the app: no root, no system VPN) and Clerk (identity). Design: <a href="https://github.com/quirq-ai/lan/blob/main/DESIGN.md" target="_blank" rel="noopener">DESIGN.md</a>.</p>
+<h3>Layout (each folder deploys separately)</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>What</th>
+<th>Ships as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cli/</code></td>
+<td><code>lan</code>, the developer CLI</td>
+<td>a binary on each developer's machine</td>
+</tr>
+<tr>
+<td><code>server/</code></td>
+<td><code>lan-server</code>: networks, invites, Clerk auth, the Headscale API</td>
+<td>a container (<code>server/Dockerfile</code>)</td>
+</tr>
+<tr>
+<td><code>deploy/</code></td>
+<td>Docker Compose: Caddy + Headscale + lan-server</td>
+<td>one VPS, see <a href="https://github.com/quirq-ai/lan/blob/main/deploy/README.md" target="_blank" rel="noopener">deploy/README.md</a></td>
+</tr>
+<tr>
+<td><code>e2e/</code></td>
+<td>full local test against a real Headscale</td>
+<td><code>./e2e/run.sh</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Install the CLI</h3>
+<pre>cd cli &amp;&amp; go install .        # → $(go env GOPATH)/bin/lan   (Go ≥ 1.27)</pre>
+<h3>Use</h3>
+<pre>lan login --server https://lan.example.com    # opens the browser (Clerk)
+# owner
+lan create design-team                        # prints: lan join lan_xxxx…
+lan invite                                    # another code (24h, single use)
+lan up --port web=3000 --dir assets=./build   # go online and share; Ctrl-C to leave
+lan kick bob
+# teammate
+lan join lan_xxxx… [--as bob]
+lan up --connect alice/web=8080 --connect alice/assets=8081
+open http://localhost:8081                    # browse Alice's ./build</pre>
+<p><code>lan up</code> prints who's online and whether each connection is <code>direct</code> or going through the relay. If you're in several networks, add <code>--net &lt;name&gt;</code>. <code>lan networks</code> lists them.</p>
+<h3>Test</h3>
+<pre>./e2e/run.sh</pre>
+<p>This starts Headscale v0.29.5, lan-server (with dev auth) and three nodes (alice, bob, carol) on this machine, then checks port sharing, the direct path, folder sharing (read-only, no <code>../</code> or symlink escapes), isolation between networks, kick, and invite reuse. Last run: 17/17 passing.</p>
+<h3>Dev auth</h3>
+<p><code>LAN_DEV_AUTH=1</code> on lan-server accepts <code>dev-&lt;name&gt;</code> tokens (<code>lan login --token dev-alice</code>), so you can test without Clerk. Never set it in production.</p>

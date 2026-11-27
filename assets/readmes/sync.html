@@ -1,0 +1,239 @@
+<p><code>sync</code> owns the quirq infra (<code>qq</code>) repo manifest, <code>infra/repo.toml</code>: its versioned schema, the only
+library that reads and edits it (<code>qqsync</code>), and the checks that keep pins honest.</p>
+<p>Every repo that quirq infra builds keeps one manifest. It lists the repo's pinned toolchains and
+dependencies and its typed targets. A target's <code>kind</code> is an opaque string; what a kind means lives in
+<code>quirq-ai/recipes</code> and the list of kinds in <code>quirq-ai/infra-config</code> (<code>config/kinds.toml</code>). This repo
+names no language and no tool.</p>
+<h3>Chromium counterpart</h3>
+<p><code>gclient</code> and <code>DEPS</code>. Like <code>DEPS</code>, the manifest is parsed and never executed, and "every parser of DEPS
+is a dependency on DEPS": so there is exactly one parser, this one, and a presubmit that rejects any
+other.</p>
+<h3>The manifest: <code>quirq-repo/1</code></h3>
+<pre>schema = "quirq-repo/1"
+[qq]                       # the qq CLI version this repo runs; pinned by version until
+version = "0.1.0"          # depot publishes releases, then also by source and digest
+[toolchains.python]        # names match the toolchains in infra-config kinds.toml
+version = "3.14.8"         # a label; the digest is what is verified
+source = "https://..."     # opaque to sync; the fetcher interprets the scheme
+digest = "sha256:&lt;64 hex&gt;" # or git:&lt;commit&gt;
+[toolchains.node]          # or one source and digest per platform
+platforms.linux-x86_64 = { source = "https://...", digest = "sha256:&lt;64 hex&gt;" }
+[deps.something]           # anything else fetched before a build, pinned the same way
+source = "https://..."
+digest = "git:&lt;40 hex&gt;"
+[[targets]]
+name = "server"
+kind = "python-service"    # opaque; recipes gives it meaning
+srcs = ["server.py", "services/**"]
+[[targets]]
+name = "tests"
+kind = "pytest"
+deps = ["server"]          # other targets in this manifest
+params = { shards = "auto" } # kind-specific, passed to the adapter as is</pre>
+<p>Paths in <code>srcs</code> and <code>outs</code> are relative to the repo root (no leading <code>/</code>, no <code>..</code>). Targets may
+also declare <code>outs</code> (outputs) and <code>cacheable = false</code> (runs, never reused). The full
+schema is <a href="https://github.com/quirq-ai/sync/blob/main/src/qqsync/schema/quirq-repo-1.schema.json" target="_blank" rel="noopener"><code>src/qqsync/schema/quirq-repo-1.schema.json</code></a>.
+Unknown keys are errors. On top of the schema, target names must be unique, target <code>deps</code> must name
+targets in the same manifest, and the target graph must have no cycle. <code>quirq-repo/1</code> only grows in
+backward compatible ways; anything else is <code>quirq-repo/2</code>.</p>
+<pre>qqsync validate infra/repo.toml                 # exit 1 and every problem, or PASS
+qqsync validate infra/repo.toml --kind pytest   # also require each kind to be one you list</pre>
+<h3>Read and edit it: the only parser</h3>
+<p><code>qqsync</code> is the one library that reads or edits a manifest. Tools in other languages call
+<code>qqsync show</code> and read JSON; they never parse the TOML themselves.</p>
+<pre>from qqsync.manifest import Manifest, load
+data = load("infra/repo.toml")             # validated plain data, or ManifestError with every problem
+m = Manifest.read("infra/repo.toml")
+m.set_pin("toolchains", "python", digest="sha256:&lt;64 hex&gt;", version="3.15.0")
+m.set_pin("toolchains", "node", platform="linux-x86_64", digest="sha256:&lt;64 hex&gt;")
+m.set_qq_version("0.2.0")
+m.add_target({"name": "lint", "kind": "pytest"}) # also set_target, remove_target
+m.write()                                   # atomic; untouched lines stay byte for byte</pre>
+<pre>qqsync show infra/repo.toml                                  # the manifest as JSON
+qqsync pin toolchains python --digest sha256:&lt;64 hex&gt; --version 3.15.0</pre>
+<p>Reading a manifest and writing it back unchanged gives the same bytes, CRLF and comments included.
+An edit changes only the lines it must, and <code>write</code> follows symlinks and keeps the file mode. Before
+editing, the file is read by both the standard TOML parser and the editor; if they disagree, or the
+editor cannot reproduce the file exactly, the edit is refused (reading still works). Every edit is validated, and an edit that would make the manifest
+invalid is undone and raises <code>ManifestError</code>.</p>
+<h3>Pins: checked on every fetch</h3>
+<p>Every toolchain and dependency is pinned by digest (the schema requires it). <code>qqsync.pins</code> checks
+fetched content against the pin: <code>fetch</code> downloads to a temporary file, hashes while it downloads,
+and moves the file into place only when the digest matches. A mismatch raises <code>PinMismatch</code>, leaves
+nothing at the destination (an older good copy stays), and the build stops.</p>
+<pre>qqsync pins [--strict] infra/repo.toml                     # list pins; --strict rejects all-zero placeholders
+qqsync fetch toolchains python --dest .qq/python.tar.zst   # https://, oci:// or file:// sources, sha256 pins
+qqsync verify toolchains python .qq/python.tar.zst         # a file against a sha256 pin
+qqsync verify deps recipes .qq/recipes                     # a checkout: pinned commit, tracked files unchanged</pre>
+<p>Redirects are followed only to <code>https://</code>.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Digest</th>
+<th>Fetched and checked as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>https://…</code>, <code>file://…</code></td>
+<td><code>sha256:</code></td>
+<td>the bytes at that URL</td>
+</tr>
+<tr>
+<td><code>oci://REGISTRY/REPO@sha256:&lt;manifest&gt;</code></td>
+<td><code>sha256:&lt;layer&gt;</code></td>
+<td>the manifest must hash to its digest and list the layer; the layer's bytes must hash to the pin (how quirq-ai/toolchains publishes)</td>
+</tr>
+<tr>
+<td>a git URL</td>
+<td><code>git:&lt;commit&gt;</code></td>
+<td>checked out by <code>qq</code>, then <code>verify</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>An <code>oci://</code> pin always names the manifest and pins a different value, the layer. <code>validate</code>,
+<code>pins --strict</code> and <code>fetch</code> reject an <code>oci://</code> source without <code>@sha256:&lt;manifest&gt;</code>, and a digest
+equal to the manifest digest, since either leaves the fetched bytes unpinned.</p>
+<p>Registry packages must be public: <code>fetch</code> asks the registry for an anonymous token and never sends
+credentials. Per-platform pins default to this machine's platform (<code>linux-x86_64</code>, <code>macos-arm64</code>, ...);
+pass <code>--platform</code> to pick another. Commit pins are checked out by the <code>qq</code> CLI and verified with
+<code>verify</code>.</p>
+<h3>No other parser: <code>qqsync guard</code></h3>
+<p>Any repo's presubmit can run <code>qqsync guard</code>. It fails when a tracked file reads TOML near a place
+that names the manifest:</p>
+<ul>
+<li><strong>Names the manifest:</strong> <code>repo.toml</code> (also split as <code>"infra/repo" ".toml"</code> or globbed as
+<code>repo.t*</code>), qqsync's <code>DEFAULT_PATH</code>, or a name assigned one of those: an UPPER_CASE constant
+(<code>MANIFEST</code>, <code>_MANIFEST</code>) anywhere in the repo, so a path kept in another module still counts,
+unless some file assigns the same name something else; any name assigned at the left margin, in
+its whole file; an indented name from its assignment until it is reassigned or a function starts
+at its indent, and as <code>self.x</code>/<code>this.x</code>/<code>cls.x</code> in its file. A function whose signature names the
+manifest (a default argument) names it throughout its body.</li>
+<li><strong>Reads TOML:</strong> an identifier containing <code>toml</code> (tomllib, pytoml, smol-toml, <code>Toml</code>,
+<code>TOML.parse</code>), a data tool (yq, dasel, taplo) or a dynamic import on the line that names the
+manifest, or importing the manifest file directly. An import of a TOML library is not a read by itself, but
+the names it binds are: Python <code>from tomllib import load</code> (also across lines in parentheses) and
+<code>import tomli as T</code>, Rust <code>use toml::from_str;</code>, JS <code>import { parse } from "smol-toml"</code> and
+<code>const { parse } = require("@iarna/toml")</code>, Go <code>t "github.com/pelletier/go-toml/v2"</code> (in a
+<code>.go</code> import), and
+<code>lib = importlib.import_module(...)</code>.</li>
+<li><strong>Finding:</strong> a reading line that names the manifest, or that has a line naming it within 5 lines
+and nearer than any line naming another <code>.toml</code> file. So a module that mentions the manifest in a
+docstring and reads its own <code>pyproject.toml</code> passes.</li>
+</ul>
+<p>Whole-line comments (<code>#</code>, <code>//</code>, <code>/*</code>, <code>*</code>, <code>&lt;!--</code>, <code>-- </code>), the <code>qqsync &lt;command&gt; ...</code> part of a
+line (or a <code>["qqsync", "show", ...]</code> argument list), <code>.toml</code> filenames and the word TOML in prose
+don't count. Markdown, plain text, TOML and JSON data files are skipped. Matching is linear in the
+size of each file. The fix is always the
+same: read the manifest with <code>qqsync show</code> (JSON) or the qqsync library.</p>
+<pre>python -m pip install "qqsync @ git+https://github.com/quirq-ai/sync@&lt;commit&gt;"
+qqsync guard .                          # exit 1 with file:line for each second parser, or PASS
+qqsync guard . --allow 'vendor/*'       # skip reviewed paths (keep the list in your presubmit)</pre>
+<p>A reviewed line can be exempted with a <code>qqsync-guard: allow &lt;reason&gt;</code> comment on it; the guard
+prints every exempted line with its reason, and ignores a marker with no reason. Both escapes
+belong in code review, like any other presubmit exemption.</p>
+<p>What it does not catch (<code>TODO(expert)</code> in <code>src/qqsync/guard.py</code>): a parser that reads the file as
+plain text (sed, grep, regexes, a hand-written parser); a path or library name built at run time
+(<code>f"infra/{name}.toml"</code>, <code>glob("infra/*.toml")</code>); a path kept under a dict or config key or as an
+argparse default (<code>args.manifest</code>); a path passed to another function and read there; a read more
+than 5 lines from the path that does not use a name assigned it; and import forms beyond those
+listed. A pre-commit <code>check-toml</code> hook within 5 lines of the manifest's name is flagged and needs
+the marker. It is a heuristic that keeps honest code honest; a determined bypass needs
+review to catch.</p>
+<h3>Use it</h3>
+<p>Other qq repos depend on <code>sync</code> by pinned commit, never by copying code:</p>
+<pre>python -m pip install "qqsync @ git+https://github.com/quirq-ai/sync@&lt;commit&gt;"
+qqsync --version</pre>
+<p>To install <code>qqsync</code> next to <code>qq</code> on your own machine, follow the qq guide:
+<a href="https://docs.quirq.dev/docs/qq" target="_blank" rel="noopener">https://docs.quirq.dev/docs/qq</a>.</p>
+<h3>Start a new repo: <code>qqsync init</code></h3>
+<pre>qqsync init . --kind python-service --kind pytest \
+  --kinds infra-config/config/kinds.toml \
+  --promoted toolchains/promoted.toml \
+  --qq-version 0.1.0
+qqsync validate infra/repo.toml --kind python-service --kind pytest</pre>
+<p>It writes <code>infra/repo.toml</code> with one target per kind (named after the kind, sorted), the
+toolchain pins those kinds need, and <code>[qq] version</code>. It never replaces an existing manifest; use
+<code>qqsync pin</code> to change pins. The same inputs give the same bytes, whatever the order of <code>--kind</code>.</p>
+<p>sync names no language or toolchain, so the data comes in as files:</p>
+<ul>
+<li><code>--kinds</code>: infra-config's <code>config/kinds.toml</code>, which says which toolchain each kind needs;</li>
+<li><code>--promoted</code>: quirq-ai/toolchains' <code>promoted.toml</code>, the pins it promoted;</li>
+<li><code>--qq-version</code>: the qq version the repo pins.</li>
+</ul>
+<p>The new targets have no <code>srcs</code>, <code>outs</code> or <code>deps</code> yet; add them by hand. Each starts as
+<code>cacheable = false</code>, because without <code>srcs</code> its inputs are unknown and a cached result could be
+stale; delete that line once the target lists its <code>srcs</code>.</p>
+<h3>Working clones: <code>qqsync project</code></h3>
+<p>The manifest's pins are read-only copies at fixed commits. A project is the other kind of sync: a
+clone someone edits, which follows a branch. <code>qqsync project</code> keeps such clones up to date and
+manages who has access to their repo. It reads no manifest, so it works on any git repo. In qq the
+same commands are <code>qq sync project ...</code>; bare <code>qq sync</code> is unchanged.</p>
+<pre>qqsync project                    # fetch, then bring each clone up to date with its strategy
+qqsync project --fetch-only       # download new commits; leave the working files alone
+qqsync project check              # is each clone behind its remote? changes nothing
+qqsync project add URL [NAME]     # clone a repo into --root
+qqsync project members            # who has access to this clone's repo, and who is invited
+qqsync project invite USER        # give USER access
+qqsync project revoke USER        # remove USER's access, or cancel their invitation</pre>
+<p><code>--root DIR</code> is one clone or a folder whose direct children are clones (default: where you are).
+<code>--branch NAME</code> follows that branch instead of the one checked out. <code>--json</code> prints one JSON
+document; an error is <code>{"error": {"code": ..., "message": ...}}</code>. Exit codes: 0 done; 1 refused;
+2 could not run; 3 from <code>check</code> only, when at least one clone has updates to receive.</p>
+<p>What "up to date" means is a strategy: a module in <code>qqsync/project/strategies/</code> with one function,
+<code>apply(clone, branch)</code>. The default, <code>ff-only</code>, fast-forwards or refuses; it never merges, rewrites
+history or discards local work. A refusal leaves the clone as it was and says why, with a code a
+caller can act on: <code>diverged</code>, <code>local-changes</code>, <code>untracked-in-the-way</code>, <code>unfinished</code>, <code>locked</code>, or
+<code>other-branch</code> when another branch than the one to follow is checked out. A clone's strategy is recorded on that machine only
+(<code>git config qqsync.strategy NAME</code>), so a shared project cannot choose the code that runs on
+someone else's machine.</p>
+<p><code>members</code>, <code>invite</code> and <code>revoke</code> act on the repo the clone's origin names, through a code host
+backend in <code>qqsync/project/backends/</code>. The one backend today is GitHub, through the <code>gh</code> command
+line: access is the repo's collaborators, and an invitation gives no access until it is accepted.
+TODO(suraj): qq already wraps <code>gh</code> in its own <code>backends/github.py</code>; say if this backend should
+live there instead.</p>
+<h3>Develop</h3>
+<pre>python -m pip install -e ".[test]"
+python -m pytest -q</pre>
+<p>Python 3.14 in CI (the org pin in infra-config); the library itself needs 3.11 or newer.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-SYN-01</td>
+<td>Manifest schema <code>quirq-repo/1</code></td>
+<td>#2</td>
+<td>merged; xo-space and innernet fixtures validate in presubmit. Both repos now carry their own <code>infra/repo.toml</code>, which presubmit does not read</td>
+</tr>
+<tr>
+<td>V0-SYN-02</td>
+<td>Parser and editor library</td>
+<td>#3</td>
+<td>merged; depot (<code>qq sync</code>, version pins) and rollers (<code>qqroll</code>) read and edit manifests through it, and <code>tests/test_manifest.py</code> checks the byte-identical round trip</td>
+</tr>
+<tr>
+<td>V0-SYN-03</td>
+<td>Pin check</td>
+<td>#4</td>
+<td>merged; done-when shown by a presubmit step</td>
+</tr>
+<tr>
+<td>V0-SYN-04</td>
+<td>"No other parser" check</td>
+<td>#5</td>
+<td>merged; done-when shown by a presubmit step</td>
+</tr>
+</tbody>
+</table></div>
+<p>Plan and every v0 item: <code>quirq-ai/infra-config</code>, <code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>Licence</h3>
+<p>Apache-2.0; see <a href="https://github.com/quirq-ai/sync/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>

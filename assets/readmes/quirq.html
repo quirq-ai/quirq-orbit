@@ -1,0 +1,22 @@
+<p>A small, filesystem-first workspace for quirqy, viewed with <a href="https://github.com/sharmasuraj0123/open-chat" target="_blank" rel="noopener">open-chat</a>. This repository contains content, not the Next.js application.</p>
+<h3>Five places, five examples</h3>
+<ul>
+<li><strong>Chat</strong>, channels: one folder per workstream or person, each with an input, its conversation, and an output: Chat/hello-world/.</li>
+<li><strong>Activity</strong>, one feed event: Activity/example.jsonl.</li>
+<li><strong>Insights</strong>, one insight card: Insights/index.json.</li>
+<li><strong>Vision</strong>, one short direction document: Vision/example.md.</li>
+<li><strong>Library</strong>, one website shortcut: Library/example.url.</li>
+</ul>
+<p>Each section holds its README plus its content files. The rules for adding, naming, and formatting files are in <a href="https://github.com/quirq-ai/quirq/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a>, and a CI check enforces them on every pull request.</p>
+<h3>Open this workspace</h3>
+<p>Run open-chat locally, click the quirqy name, browse to this directory, and choose <strong>Observe this folder</strong>. If the directory is outside the picker's boundary, set MIRROR_BROWSE_ROOT in the app's .env.local to its parent directory. Alternatively, set MIRROR_ROOT to this directory before starting the app.</p>
+<p>Select the root of this repository itself so the links in the examples, which are relative to the root, resolve. The dock in the current open-chat version orders these sections as Chat, Activity, Insights, Vision, Library.</p>
+<h3>On the hub</h3>
+<p>What this workspace is for is in <a href="https://github.com/quirq-ai/quirq/blob/main/SPACE.md" target="_blank" rel="noopener">SPACE.md</a>: its goal, the outcomes that show it is met, who owns it, and the rules and routines people and agents here follow. The hub shows it at the top of the project, with how many outcomes are done.</p>
+<p>This workspace is also the project <a href="https://hub.quirq.dev/quirq/quirq" target="_blank" rel="noopener">quirq/quirq</a> on hub.quirq.dev, in the <code>quirq</code> space. Its <strong>Files</strong> tab shows the sections the way open-chat does, and members of the space can type into any conversation: each message is appended to the <code>.log.jsonl</code> beside it and committed for them. To work on it with plain git, install the spacehub CLI, run <code>spacehub auth login</code>, then:</p>
+<pre>git remote add quirq quirq://hub.quirq.dev/quirq/quirq
+git pull --no-rebase quirq main
+git push quirq main</pre>
+<p>CONTRIBUTING.md says how the hub and GitHub stay in step.</p>
+<h3>Change what you see</h3>
+<p>Edit a file on disk and the active app refreshes automatically. Add JSONL lines to extend the activity feed; change the conversation messages or insight card; edit the vision document; replace the URL with your own address. The app displays these files read-only. The chat example is a saved conversation, without a live model or sample-reply engine. No model, API key, account, or database is required. The Library webpage loads externally; sites that block embedding can be opened with <strong>Open in new tab</strong>.</p>

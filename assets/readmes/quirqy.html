@@ -1,0 +1,374 @@
+<p><a href="https://github.com/quirq-ai/quirqy/blob/quirq/public/quirq-logo.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/quirqy/quirq/public/quirq-logo.svg" alt="Quirqy logo" loading="lazy"></a></p>
+<p><strong>Explore repositories, their history, and the people around them in interactive 3D.</strong></p>
+<p>Quirqy builds on Observatory's shared 3D engine and liquid-glass interface. Its primary repository apps are <strong>Data Lab</strong> for files and commit history, <strong>Activity Lab</strong> for pull requests, issues, reviews, comments, forks, and contributors, and <strong>About</strong> for the connected repository’s README. Scientific instruments remain available through the dock's <strong>Apps</strong> launcher.</p>
+<p>This project is maintained on the <code>quirq</code> branch of <a href="https://github.com/quirq-ai/quirqy" target="_blank" rel="noopener">quirq-ai/quirqy</a>. Every page centers on a meaningful 3D visualization; panels and timelines support the scene.</p>
+<p>The existing <code>v0</code> tag preserves the original remote baseline, and <code>v0.1</code> marks an earlier checkpoint. The <code>quirq</code> branch contains the subsequent work documented here.</p>
+<h3>Run locally</h3>
+<p>Use a supported Node.js LTS release: <strong>22.22.2 or later in the 22.x line</strong>, or <strong>24.15.0 or later in the 24.x line</strong>, plus npm and a modern browser with WebGL support.</p>
+<pre>git clone --branch quirq https://github.com/quirq-ai/quirqy.git
+cd quirqy
+npm ci
+npm run dev</pre>
+<p>Open <a href="http://localhost:5174/data" target="_blank" rel="noopener">Data Lab</a>, <a href="http://localhost:5174/activity" target="_blank" rel="noopener">Activity Lab</a>, or <a href="http://localhost:5174/about" target="_blank" rel="noopener">About</a>. The default development port is <code>5174</code>; Vite prints the actual address if that port is occupied. The home page <code>/</code> opens Data Lab; the Solar System remains available at <code>/solar</code>.</p>
+<pre>npm run build       # Production files in dist/
+npm run preview     # Preview the production build, normally on port 5174
+npm test</pre>
+<p>No application backend, environment file, GitHub token, or account setup is required. Live repository imports need network access to GitHub; the bundled example datasets load without a GitHub request.</p>
+<h3>Start exploring</h3>
+<ol>
+<li>Open <strong>Data</strong> or <strong>Activity</strong> in the dock.</li>
+<li>Open <strong>GitHub</strong> in the dock, then choose the preloaded <strong>quirq-ai/xo</strong> or <strong>quirq-ai/xo-space</strong> example, or enter a public repository URL such as <code>https://github.com/owner/repository</code> and choose <strong>Load</strong>.</li>
+<li>Select a scene view above the dock's app row. Use <strong>Timeline</strong> to show or hide playback controls, step through records, scrub, or change speed.</li>
+<li>Click a scene item to inspect it. Use <strong>Frame view</strong> or <strong>F</strong> to return to the whole scene; <strong>H</strong> opens that lab's help.</li>
+<li>Read <strong>Data coverage</strong> before interpreting a sample or exporting it.</li>
+</ol>
+<p>The selected repository is shared between Data, Activity, and About. The two labs use separate datasets and independent timelines. Data imports pin the repository's default branch to one commit. Branch, file, and query URLs are not accepted.</p>
+<h3>Data Lab</h3>
+<p>Data Lab turns repository hierarchy and sampled first-parent commit history into two views:</p>
+<ul>
+<li><strong>Structure:</strong> folders are carbon-like anchors and files are colored atoms, with file categories explained in the Scene guide. Files connect to their actual folders. While playing, folder marbles become enclosures around their contents and travelling current marks the current commit. Pausing restores the folder marbles and visible pathways. Brightness builds with loaded commit edits and rewinds with the timeline.</li>
+<li><strong>Growth tree:</strong> directories form branches and files form leaves. Current repository file bytes set canopy length and trunk radius on a cube-root scale, using 1 MiB as the reference. Branch size follows current descendant bytes; leaf area follows each file’s current bytes relative to 16 KiB, independently of canopy size. Byte increases grow the tree, byte decreases shrink it, and equal byte sizes stay equal across commits. The camera stays fixed during replay so those changes remain visible. Totals use the full repository file tree, including unmapped and dot-prefixed files, even though the canopy displays up to 500 leaves. They count Git blob contents, not .git storage or repository history. The guide and controls show byte totals and coverage for the selected commit. Unknown sizes are muted and excluded from the known subtotal; empty files have zero leaf area but remain pickable. Historical sizes come from recorded trees, never from line-count estimates.</li>
+</ul>
+<p>The Structure root shows the current commit author's portrait and name. During playback it glows; when paused, a wide glass message panel shows <strong>only the commit title</strong>, the commit ID, expandable changed files, line additions/deletions, and a GitHub link. Click the author's photo or name to collapse or reopen this panel. Drag, right-drag, wheel, and touch gestures over the portrait or name still control the 3D camera. Unknown or unavailable portraits use initials.</p>
+<p><strong>Frame roots</strong> in Growth tree opens a top-to-bottom classification tree and shortens the canopy around the same ground junction. The repository trunk remains the root. Folders at the same depth share a horizontal level, each subtree occupies its own span, and files have dedicated vertical lanes. Folder labels show the number of distinct loaded commits editing any of their descendants, for comparison across a level. The 3D rope connections keep their exact parents, with shallow depth instead of overlapping shelves. Basenames sit below their junctions and tips; labels never overlap. Zoom, pan, or focus a folder to read dense repositories without shrinking the text. Frame view restores the original compact root composition beneath the canopy. Every distinct loaded commit editing a file adds the same repository-calibrated length step, retained through renames and rewound with playback. In classification view each edit adds exactly the same downward extension along the file’s lane, regardless of file bytes or edit size, preserving lane spacing. Roots start faint and neutral. The latest edit colors a file root and its name green if its measured bytes increased, red if they decreased, and yellow if the size stayed equal. Folder pathways and names use the net change in their total descendant bytes at their latest descendant edit, including subfolders and hidden files. Opposing gains and losses are summed in bytes. Colors persist until the next edit; unavailable or incomplete before/after comparisons remain faint and neutral. In root mode, file and folder names appear only after their first edit in the loaded history and disappear when rewinding before that edit. Unedited roots remain visible. Edited labels retain full readability, including when their byte comparison is unknown. Rewinding restores both the prior extension and color. The inspector reports edits, downward extension, and the latest byte difference; compare extension within one repository and edit counts across repositories. Thickness is a visual effect. Dot-prefixed files and folders are hidden from roots, while the underlying dataset and other views retain them.</p>
+<p>In root focus, <strong>drag to pan</strong> at any zoom, <strong>Alt-drag to rotate freely</strong>, and <strong>Shift-drag horizontally to roll</strong>. Right-drag also pans. With touch, one finger rotates; two fingers pan, pinch to zoom, or twist to roll. <strong>Frame view / F</strong> restores upright orbit and canopy framing. Search files, focus a folder, inspect a selected file, and use <strong>Data coverage → Export loaded data</strong> to download the loaded metadata as JSON.</p>
+<p>These visual encodings describe loaded repository structure and changes, not runtime dependencies, code quality, or individual productivity. The scene may map fewer files than the loaded dataset; the panel reports coverage and mapped counts.</p>
+<h3>Activity Lab</h3>
+<p>Activity Lab visualizes actual public GitHub collaboration records in three arrangements:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>View</th>
+<th>Arrangement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Constellation</strong></td>
+<td>Records grouped by activity type</td>
+</tr>
+<tr>
+<td><strong>Orbits</strong></td>
+<td>Records arranged around the repository</td>
+</tr>
+<tr>
+<td><strong>Contributors</strong></td>
+<td>Related participation grouped around contributors</td>
+</tr>
+</tbody>
+</table></div>
+<p>All three views use the same records, filters, and dated event timeline. Select a body or an Activity index entry to inspect it and follow its GitHub link; double-click a body to focus it. Search by title, number, or contributor, filter activity types, and choose an individual contributor.</p>
+<p><strong>Pull request and issue clusters retain their total size</strong>, including closed and merged history, while only open work is visible by default. To reveal loaded closed or merged records, select <strong>only Pull requests</strong> or <strong>only Issues</strong> in the Scene guide and enable <strong>Show historical</strong>. This toggle affects that selected category. It does not resize its cluster. Where a complete repository count is unavailable, <strong>≥</strong> marks a loaded lower bound; no bodies are invented for records that were not loaded.</p>
+<p>Contributors receive the largest area and portrait circles, with GitHub handles and space reserved for readable portraits and labels. Verified example portraits are bundled; other available profile photos load from GitHub, with initials as a fallback.</p>
+<p><strong>Refresh from GitHub</strong> fetches a newer bounded sample. <strong>Data coverage → Export snapshot</strong> downloads the loaded metadata as JSON.</p>
+<p>Playback reveals records at their returned timestamps and sampled issue events. Current statuses, titles, ownership, and contributor counts describe the fetched snapshot, not a reconstructed historical state. Contributors without historical timestamps stay visible during replay. Contribution counts are GitHub's aggregate commit counts, not collaboration scores or productivity measures.</p>
+<h3>About</h3>
+<p><strong>About</strong> opens the connected repository’s default-branch README in a wide, scrollable reading panel. A 3D folio beside it maps each heading to a translucent page, with page size and ruled marks reflecting relative section length. Select a page or a <strong>Contents</strong> entry to jump to that section; scrolling highlights your place in both. A README without headings appears as one document page.</p>
+<p>The text stays flat and selectable. <strong>A− / A+</strong> adjust reading size; code blocks, tables, images, task lists, and expandable details retain their structure. <strong>GitHub ↗</strong> opens the original README. The shared dock provides GitHub connection, opacity, and reading progress; About has no playback timeline.</p>
+<p>The XO examples include actual README snapshots with visible capture dates. <strong>Refresh from GitHub</strong> loads the latest README; arbitrary public repositories load directly from GitHub. The last successfully fetched README is cached locally when browser storage permits. README content is sanitized before display, relative links and images resolve against its repository directory, and missing files or access errors leave an explicit recoverable state. README text is limited to 1 MiB; external images still require network access.</p>
+<h3>Dock, panels, and appearance</h3>
+<p>The repository apps share one dock and glass-panel system:</p>
+<ul>
+<li><strong>Logo in the middle of the bottom app row:</strong> drag it to move the dock; click to smoothly collapse everything to the logo, then click again to expand. Controls keep their state. Reduced-motion preferences remove the transition.</li>
+<li><strong>Edit beside the logo (under it on narrow screens):</strong> upload a PNG, JPG, WebP, or SVG up to 5 MB, or reset the default logo. Uploads are rasterized to a bounded PNG with transparency retained. The logo is shared by the dock, loading screen, favicon, and the legacy recording overlay.</li>
+<li><strong>Data, Activity, About, and Apps:</strong> switch repository labs or open the other 3D instruments. Repository pages keep the top bar clear; scene choices appear above the dock's apps.</li>
+<li><strong>GitHub:</strong> opens the repository connection, example choices, source metadata, and refresh controls above the dock.</li>
+<li><strong>Timeline and Opacity:</strong> independent controls in the dock. Opacity ranges from <strong>0-100%</strong> across all dock surfaces, app tiles, cards, controls, menus, and glass panels while text and icons remain readable. Clearer glass increases simulated edge refraction; more opaque glass adds softness. Browsers without SVG backdrop refraction retain blur and highlights. Reduced-transparency and high-contrast preferences use solid surfaces.</li>
+<li><strong>Floating sidebars:</strong> drag their headers and use the header's <strong>− / +</strong> control to collapse or expand. On narrow screens, page buttons reopen the corresponding sheets.</li>
+<li><strong>Position shortcuts:</strong> focused drag handles support Arrow keys, <strong>Shift + Arrow</strong> for larger steps, and <strong>Home</strong> to reset. Double-click a handle to restore its default position. Dock and panel positions are remembered separately for desktop and mobile.</li>
+</ul>
+<p>Glass panels and the commit message panel share appearance tokens in <code>src/ui/glass-surfaces.css</code>. Dock materials share the inherited opacity contract in <code>src/ui/dock-material.css</code>.</p>
+<p><strong>Adding dock components:</strong> native buttons and fields inside <code>.panel-dock</code> inherit the shared material automatically. Give custom cards <code>data-dock-surface</code> and optionally set <code>--dock-tint</code> (RGB channels). Detached dock menus use <code>data-dock-material</code> with the shared <code>.panel</code> surface. App tiles use <code>.repository-app-icon</code> and <code>--app-tile-start</code> / <code>--app-tile-end</code> colors. Avoid fixed opaque fills or container <code>opacity</code>: labels, glyphs, slider indicators, focus outlines, and status indicators stay readable. Image-preview checkerboards and modal focus scrims retain their semantic treatment. Accessibility preferences override the shared material centrally. Verify new components at 0%, 50%, and 100%, including hover, selection, expansion, and mobile layouts.</p>
+<h4>Repository scene controls</h4>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Orbit / pan</td>
+<td>Drag / right-drag</td>
+</tr>
+<tr>
+<td>Zoom</td>
+<td>Wheel or pinch</td>
+</tr>
+<tr>
+<td>Inspect</td>
+<td>Click a scene item</td>
+</tr>
+<tr>
+<td>Focus an activity</td>
+<td>Double-click an Activity body</td>
+</tr>
+<tr>
+<td>Play / pause</td>
+<td>Space</td>
+</tr>
+<tr>
+<td>Previous / next commit or activity event</td>
+<td>Left / Right Arrow</td>
+</tr>
+<tr>
+<td>Frame scene</td>
+<td>F</td>
+</tr>
+<tr>
+<td>Help</td>
+<td>H</td>
+</tr>
+<tr>
+<td>Close help</td>
+<td>Escape</td>
+</tr>
+<tr>
+<td>PNG scene snapshot in Data Lab</td>
+<td>S</td>
+</tr>
+</tbody>
+</table></div>
+<p>Shortcuts defer to focused inputs and controls. Root-focus rotation in Data Lab has the additional gestures described above.</p>
+<h3>Bundled examples and live-import limits</h3>
+<p><strong>XO and XO Space are the only bundled repository examples.</strong> They are captured snapshots, not live clones at runtime. Choosing an example loads checked-in JSON and known local portraits without contacting the GitHub API.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Example</th>
+<th>Data snapshot</th>
+<th>Data history</th>
+<th>Activity snapshot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>quirq-ai/xo</code></td>
+<td>2026-10-18, pinned <code>b61bc4c</code></td>
+<td>44 first-parent commits</td>
+<td>2026-10-18</td>
+</tr>
+<tr>
+<td><code>quirq-ai/xo-space</code></td>
+<td>2026-10-18, pinned <code>577850b</code></td>
+<td>50 first-parent commits</td>
+<td>2026-10-18</td>
+</tr>
+</tbody>
+</table></div>
+<p>The example's capture time, pinned commit, and limitations are available in the dataset and coverage UI. Startup normally opens XO; a saved repository session can restore the previous selection. New GitHub activity does not appear in a bundled snapshot until it is refreshed.</p>
+<p>Live Data imports offer <strong>8, 12, or 20 recent first-parent commits</strong>, defaulting to 20. The loader retains at most <strong>2,500 paths</strong> and <strong>200 changed files per commit</strong>, prioritizing sampled changes. Merge changes are compared with the first parent; side-branch commits are not replayed separately. GitHub tree truncation, omitted paths, partial diffs, and submodule limitations are reported under Data coverage.</p>
+<p>Live Activity imports make at most <strong>20 public API requests</strong>. Source limits are:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Maximum requested</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Recently updated pull requests, all states</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Issue/PR listing, all states</td>
+<td>50</td>
+</tr>
+<tr>
+<td>Issue-only search results, all states</td>
+<td>50</td>
+</tr>
+<tr>
+<td>Open pull requests / open issues</td>
+<td>50 each</td>
+</tr>
+<tr>
+<td>Conversation comments / inline review comments</td>
+<td>30 each</td>
+</tr>
+<tr>
+<td>Newest forks</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Contributors</td>
+<td>30</td>
+</tr>
+<tr>
+<td>Issue workflow events</td>
+<td>50</td>
+</tr>
+<tr>
+<td>Reviews</td>
+<td>30 per PR for up to 8 loaded PRs</td>
+</tr>
+</tbody>
+</table></div>
+<p>These are source-page limits, not a promise of complete history or a single final item count: sources are merged and deduplicated, and issue events can supply related records. Public API access and search can be limited or denied. Partial Activity results identify unavailable sources; previously usable data remains available where possible. Use the bundled examples when GitHub is unavailable.</p>
+<h4>Refresh Data's bundled snapshots</h4>
+<p>Normal users do <strong>not</strong> need Git or the local clones to open examples. Maintainers rebuilding the Data snapshots need Git and two bare clones outside the app repository:</p>
+<pre>mkdir -p ../.workspace-cache/observatory-examples
+git clone --bare --depth=64 --single-branch --branch main https://github.com/quirq-ai/xo.git ../.workspace-cache/observatory-examples/xo.git
+git clone --bare --depth=64 --single-branch --branch main https://github.com/quirq-ai/xo-space.git ../.workspace-cache/observatory-examples/xo-space.git
+npm run examples:refresh</pre>
+<p>For existing clones, fetch first:</p>
+<pre>git -C ../.workspace-cache/observatory-examples/xo.git fetch --depth=64 origin main:refs/heads/main
+git -C ../.workspace-cache/observatory-examples/xo-space.git fetch --depth=64 origin main:refs/heads/main
+npm run examples:refresh</pre>
+<p>The generator reads Git objects without checking out or executing repository code. If it reports a shallow first-parent boundary, deepen that clone and rerun. Use <code>npm run examples:refresh -- --help</code> for custom cache/output paths, a 1-50 commit limit, pinned refs, and a reproducible capture timestamp.</p>
+<p>Verified author mappings live in <code>src/data-lab/examples/author-profiles.json</code>. Unmapped commits use initials until their GitHub identity is verified. This script refreshes <strong>Data snapshots only</strong>. Activity examples are separate captured public API datasets in <code>src/activity-lab/examples/</code>; the Activity <strong>Refresh from GitHub</strong> button updates the browser's loaded snapshot, not those source files.</p>
+<h3>Storage and privacy</h3>
+<p>Quirqy runs in your browser. Imports use public GitHub reads without credentials or tokens; imported repository code is never executed. Retained repository datasets contain metadata, such as paths, commit messages, authors, change counts, and collaboration records, rather than source blobs.</p>
+<p>Browser storage is best-effort:</p>
+<ul>
+<li><strong>Data:</strong> IndexedDB caches metadata snapshots, with a small localStorage pointer for the current selection. Defaults allow four cache entries and 8 MiB total; an individual saved snapshot is limited to 4 MiB.</li>
+<li><strong>Activity:</strong> the last complete loaded snapshot is cached in localStorage when its serialized size fits the application's limit.</li>
+<li><strong>Preferences:</strong> the connected repository URL, logo, panel opacity, view choices, and floating positions are stored locally. If storage is unavailable, features retain in-memory state where supported.</li>
+</ul>
+<p>There is <strong>no login or account-based synchronization</strong>. A custom logo or saved session belongs to this browser and site origin; another device, browser, port, or deployed origin has its own storage. Clearing the site's browser data removes these preferences and caches. GitHub API requests and non-bundled profile pictures still make network requests. The app does not install an offline service worker.</p>
+<h3>Other 3D instruments</h3>
+<p>Open these through <strong>Apps</strong> in the repository dock or by their direct URLs. Their old top-navbar links are hidden; their routes and implementations remain available.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Instrument</th>
+<th>Route</th>
+<th>What it explores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Solar System</td>
+<td><code>/solar</code></td>
+<td>Keplerian planetary motion, moons, Halley, belts, and an interactive N-body experiment</td>
+</tr>
+<tr>
+<td>Equation Lab</td>
+<td><code>/equation</code></td>
+<td>Parametric curves, ODE/force fields, surfaces, swarms, superposition, data fitting, and saved experiment versions</td>
+</tr>
+<tr>
+<td>SPM Mooring</td>
+<td><code>/spm</code></td>
+<td>Buoy motion, chains, weather inputs, catenary shape, and tension</td>
+</tr>
+<tr>
+<td>Earth Lab</td>
+<td><code>/earth</code></td>
+<td>Earth layers, composition, atmosphere, magnetic field, and interior gravity</td>
+</tr>
+<tr>
+<td>Light Lab</td>
+<td><code>/light</code></td>
+<td>Ray tracing, refraction, Fresnel reflection, dispersion, mirrors, and lenses</td>
+</tr>
+<tr>
+<td>Gravity Lab</td>
+<td><code>/gravity</code></td>
+<td>Orbital mechanics, N-body particles, tunable force laws, and pedagogical quantum-gravity models</td>
+</tr>
+<tr>
+<td>Photo Lab</td>
+<td><code>/photo</code></td>
+<td>Photoelectric effect and a simplified photosynthesis model</td>
+</tr>
+<tr>
+<td>Fractals Lab</td>
+<td><code>/fractals</code></td>
+<td>Escape-time fractals, 3D raymarched fractals, IFS, and diffraction patterns</td>
+</tr>
+</tbody>
+</table></div>
+<p>The scientific instruments retain their original numerical methods: JPL approximate planetary elements, leapfrog N-body integration, RK4 equation integration, quasi-static catenary mooring, and Snell/Fresnel/Cauchy optics. These are models with deliberate approximations. For example, solar ephemerides omit full planetary perturbations, the mooring is not a full dynamic cable model, and quantum-gravity modes are pedagogical effective models.</p>
+<h4>Capture availability</h4>
+<ul>
+<li><strong>Data Lab:</strong> <strong>S</strong> downloads a PNG scene render. The camera/recording button is not part of its dock.</li>
+<li><strong>Activity Lab:</strong> exports the loaded activity snapshot as JSON. It does not currently expose screenshot or video recording.</li>
+<li><strong>Scientific instruments:</strong> the existing runtime retains PNG capture with <strong>S</strong> and canvas video recording with <strong>V</strong>, up to <strong>10 seconds</strong>, where the browser supports <code>MediaRecorder</code> and canvas capture. It records the rendered canvas plus its custom logo/readout overlay, not the entire browser window or arbitrary DOM panels. Available video formats depend on browser support. The legacy recorder also exports sampled JSON/CSV traces; trace support varies by instrument.</li>
+</ul>
+<p>The repository labs use separate runtimes and do not inherit the legacy video recorder.</p>
+<h3>Deploy</h3>
+<pre>npm ci
+npm run build</pre>
+<p>For <strong>Vercel</strong>, import <code>quirq-ai/quirqy</code> with <strong>Production Branch: <code>quirq</code></strong> and <strong>Root Directory: <code>.</code></strong> (the repository root containing <code>package.json</code>). The checked-in <a href="https://github.com/quirq-ai/quirqy/blob/quirq/vercel.json" target="_blank" rel="noopener">vercel.json</a> selects Vite, runs <code>npm ci</code> / <code>npm run build</code>, publishes <code>dist/</code>, and provides the SPA fallback for direct page visits and refreshes.</p>
+<p>After deployment, <code>/</code> opens Data Lab, <code>/data</code> and <code>/activity</code> open their respective repository scenes, and <code>/solar</code> opens the Solar System. Check all three repository entry URLs after a deployment. The latest <code>quirq</code> commit is the release source; the historical <code>v0</code> and <code>v0.1</code> tags are earlier versions.</p>
+<p>For other static hosts, publish <strong><code>dist/</code></strong> and configure unknown application routes to serve <code>index.html</code>, while serving existing assets normally. Vite's local fallback alone does not configure a production host. See <a href="https://vercel.com/docs/frameworks/frontend/vite#using-vite-to-make-spas" target="_blank" rel="noopener">Vercel's Vite SPA routing guidance</a>.</p>
+<p>The current app uses root-relative routes and asset URLs; deploy at the site's root. Hosting under a subdirectory requires route and asset-path changes. No backend or application environment variables are required. <code>PORT</code> optionally changes the local Vite development/preview port. <code>npm run preview</code> is for checking a build locally.</p>
+<h3>Development</h3>
+<p>Quirqy uses vanilla JavaScript ES modules, <strong>three.js 0.170</strong>, and <strong>Vite 6</strong>.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/bootstrap.js</code></td>
+<td>Shared UI startup and runtime selection</td>
+</tr>
+<tr>
+<td><code>src/data-lab/</code></td>
+<td>Repository import, commit model, Structure/Growth tree scenes, controls, and examples</td>
+</tr>
+<tr>
+<td><code>src/activity-lab/</code></td>
+<td>Public collaboration loader, activity model, 3D views, contributor portraits, and examples</td>
+</tr>
+<tr>
+<td><code>src/repository/</code></td>
+<td>Shared repository connection and persisted Data session</td>
+</tr>
+<tr>
+<td><code>src/ui/</code></td>
+<td>Glass material, movable panels, dock apps/disclosure/motion, timelines, and legacy panels</td>
+</tr>
+<tr>
+<td><code>src/branding/</code></td>
+<td>Local logo preference and editor</td>
+</tr>
+<tr>
+<td><code>src/nav/routes.js</code></td>
+<td>Stable route map</td>
+</tr>
+<tr>
+<td><code>src/main.js</code></td>
+<td>Scientific instrument runtime and render loop</td>
+</tr>
+<tr>
+<td><code>src/scene/</code>, <code>src/camera/</code></td>
+<td>Shared rendering and camera tools</td>
+</tr>
+<tr>
+<td><code>src/sim/</code>, <code>src/math/</code>, <code>src/earth/</code>, <code>src/spm/</code>, <code>src/light/</code>, <code>src/gravity/</code>, <code>src/photo/</code>, <code>src/fractal/</code></td>
+<td>Scientific engines and scenes</td>
+</tr>
+<tr>
+<td><code>src/capture/</code></td>
+<td>Legacy canvas video, overlays, and sampled traces</td>
+</tr>
+<tr>
+<td><code>scripts/build-data-examples.mjs</code></td>
+<td>Reproducible Data metadata snapshots from bare clones</td>
+</tr>
+</tbody>
+</table></div>
+<p>Read <a href="https://github.com/quirq-ai/quirqy/blob/quirq/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a> before changing the interface. Every page must remain a meaningful 3D visualization, with Data Lab as the shared visual reference. Activity Lab is about collaboration and community records, not a substitute commit/file-history scene.</p>
+<p>Branch from <code>quirq</code>, keep changes focused, and run:</p>
+<pre>npm test
+npm run build</pre>
+<p>For UI changes, also exercise the affected flow in a browser at desktop and narrow widths. Preserve keyboard access, reduced-motion behavior, shared glass styling, and truthful data-coverage notices. Keep generated builds, node_modules, and local clone caches out of commits.</p>
+<p>When changing a scientific solver or physical constant, cite its source and compare the result with an analytic solution, published value, or known limiting case. Pull requests should explain the behavior change and relevant validation.</p>
+<h3>Credits and license</h3>
+<p>Quirqy continues the <a href="https://github.com/sharmasuraj0123/observatory" target="_blank" rel="noopener">original Observatory project</a>.</p>
+<ul>
+<li><strong>Planetary elements:</strong> E. M. Standish, JPL/NASA, “Keplerian Elements for Approximate Positions of the Major Planets.”</li>
+<li><strong>Earth interior:</strong> PREM (Dziewonski and Anderson, 1981) and IUGG reference values.</li>
+<li><strong>Textures:</strong> <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a>, CC BY 4.0, based on NASA imagery.</li>
+<li><strong>Engine and tooling:</strong> <a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a> and <a href="https://vitejs.dev/" target="_blank" rel="noopener">Vite</a>.</li>
+<li><strong>Brand:</strong> the Quirq/XO mark. Repository records and profile images retain their source attribution.</li>
+</ul>
+<p>Texture assets are CC BY 4.0 as noted above. <strong>Application code has no license declared yet.</strong> The texture license does not license the application code; contact the maintainers to confirm reuse terms.</p>

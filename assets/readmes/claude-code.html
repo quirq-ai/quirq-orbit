@@ -1,0 +1,81 @@
+<p>One container that runs <a href="https://code.claude.com" target="_blank" rel="noopener">Claude Code</a> with <strong>Remote Control</strong> on. You sign in once
+with your own Claude subscription, then drive the session from <a href="https://claude.ai/code" target="_blank" rel="noopener">claude.ai/code</a> or the
+Claude app. No API key is needed.</p>
+<h3>Run</h3>
+<pre>docker build -t claude-code .
+docker run -d --name cc -p 8080:8080 -v cc-data:/data claude-code
+docker logs -f cc</pre>
+<p>The logs print a <strong>CONNECT</strong> link:</p>
+<pre><code>12:45:19 CONNECT: http://localhost:8080/connect#Xb3…
+</code></pre>
+<ol>
+<li>Open it. The page has a <strong>Sign in to Claude</strong> link; sign in with your subscription.</li>
+<li>Paste the code Claude shows into the page and press <strong>Connect</strong>.</li>
+<li>The container starts <code>claude remote-control</code>. Open claude.ai/code or the Claude app and pick the session
+(the page and the logs show its name and links).</li>
+</ol>
+<p>Prefer the terminal? <code>docker run -it …</code> and paste the code straight into it instead.</p>
+<p>The sign-in is kept in the <code>/data</code> volume, so restarting the container goes straight to Remote Control.</p>
+<h3>Why not a token?</h3>
+<p>Remote Control needs a full sign-in. Long-lived tokens from <code>claude setup-token</code> (<code>CLAUDE_CODE_OAUTH_TOKEN</code>)
+are inference-only and Remote Control refuses them, so the container runs <code>claude auth login</code> and takes the code back.</p>
+<h3>Security</h3>
+<ul>
+<li>The connect page needs the token from the CONNECT link (random per start, or <code>CONNECT_TOKEN</code>). The token is
+in the link's <code>#fragment</code>, so it is not sent in requests or Referer headers; the page sends it as a bearer.
+Only whoever can read the container's logs can open the page.</li>
+<li>The sign-in code only works for this container's own login attempt (PKCE), so it is useless if seen elsewhere.</li>
+<li>Runs as the unprivileged <code>node</code> user. Nothing secret is in the image or its env.</li>
+<li>Anyone with the connect link can sign the container in to <em>their</em> account; keep the logs private.</li>
+</ul>
+<h3>Settings</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PUBLIC_URL</code></td>
+<td><code>http://localhost:$PORT</code></td>
+<td>The address used in the CONNECT link (e.g. the app's URL)</td>
+</tr>
+<tr>
+<td><code>CONNECT_TOKEN</code></td>
+<td>random per start</td>
+<td>Fix the connect token instead</td>
+</tr>
+<tr>
+<td><code>SESSION_NAME</code></td>
+<td><code>claude-code-&lt;random&gt;</code></td>
+<td>The session's name in claude.ai/code</td>
+</tr>
+<tr>
+<td><code>PERMISSION_MODE</code></td>
+<td>Claude Code's default</td>
+<td>Passed to <code>--permission-mode</code> (e.g. <code>acceptEdits</code>)</td>
+</tr>
+<tr>
+<td><code>TASK</code></td>
+<td>, </td>
+<td>Written to <code>TASK.md</code> in the work directory</td>
+</tr>
+<tr>
+<td><code>WORKDIR</code></td>
+<td><code>/data/work</code></td>
+<td>Where Claude works (trusted automatically)</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td><code>8080</code></td>
+<td>Connect page and <code>GET /healthz</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Launchpad</h3>
+<p><code>launchpad/template.yaml</code> runs the same image as a Launchpad app: open the app's logs, follow the CONNECT link
+(it uses the app's URL), sign in, and continue in the Claude app. Replace <code>&lt;project&gt;</code> with the Harbor project and
+push the image as <code>registry.xo.builders/&lt;project&gt;/claude-code:0.1.0</code>.</p>

@@ -1,0 +1,171 @@
+<p><code>rollers</code> moves pinned dependencies and toolchains forward for quirq infra (<code>qq</code>), through the same
+gate as any other change, with no human in the loop. An agent may land a clean roll alone (plan D4).</p>
+<h3>Chromium counterpart</h3>
+<p>Skia AutoRoll, and <code>roll-dep</code> in depot_tools. AutoRoll and similar rollers write about a fifth of
+Chromium's commits; here they do the same job for every repo quirq infra builds.</p>
+<h3>What it rolls</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Roller</th>
+<th>Moves</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Toolchain pins (V0-ROL-01)</td>
+<td><code>[toolchains.*]</code> pins in each repo's <code>infra/repo.toml</code></td>
+<td>Reads the digests <code>quirq-ai/toolchains</code> promoted and edits the manifest only through <code>sync</code> (<code>qqsync</code>)</td>
+</tr>
+<tr>
+<td>Lockfiles (V0-ROL-02)</td>
+<td>Python requirements, <code>pnpm-lock.yaml</code></td>
+<td>Dependabot, configured from <code>rollers.toml</code> in <code>quirq-ai/infra-config</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Which repos get which roller, and how often, is config: <code>config/rollers.toml</code> in
+<code>quirq-ai/infra-config</code>, read with <code>qqcfg.load</code>.</p>
+<h3>Lockfile updates: <code>qqroll dependabot</code> (V0-ROL-02)</h3>
+<p>Every repo that a <code>tool = "dependabot"</code> roller covers gets two generated files, kept under
+<code>generated/github/&lt;repo&gt;/</code> and copied into that repo as is:</p>
+<ul>
+<li>
+<p><code>.github/dependabot.yml</code>: one update per roller, with its ecosystem, directory, cadence and open limit.</p>
+</li>
+<li>
+<p><code>.github/workflows/qq-roll-land.yml</code>: lands a clean Dependabot PR with no human. The check is
+<a href="https://github.com/quirq-ai/rollers/blob/main/src/qqroll/land_check.py" target="_blank" rel="noopener"><code>src/qqroll/land_check.py</code></a>, embedded in the workflow byte for byte. A
+roll is clean only when all of these hold:</p>
+<ul>
+<li>Dependabot opened the PR and triggered this run, and the PR has exactly one commit, made by GitHub
+for Dependabot (committer <code>web-flow</code>, verified). Author emails can be forged; these can't.</li>
+<li>Every changed file is <em>modified</em> (no adds, deletes or renames), at most 20, and is a dependency
+file at the roller's directory: <code>requirements*.txt</code> for pip, <code>package.json</code> and <code>pnpm-lock.yaml</code>
+for npm.</li>
+<li>Every changed line is a version: existing dependency entries in <code>package.json</code> rewritten in place
+(no entries added or removed), plain pins in requirements files (no index options, URLs or
+markers), and registry-only lockfile entries.</li>
+<li><code>pnpm-lock.yaml</code> moves only that dependency. In <code>importers</code> and <code>settings</code> only its specifier and
+version change (and its version inside other entries' peer suffixes). In <code>packages</code> and <code>snapshots</code>
+existing entries stay byte for byte, except that an existing snapshot's edge to the bumped
+dependency moves from the previous to the new version; every added package's integrity is the one
+registry.npmjs.org publishes for it, with no tarball or other source, and its other fields (engines,
+os, cpu, libc, bins, peers, bundled dependencies) say what the registry manifest says; every added
+or changed snapshot's edges are dependencies its registry manifest declares, of the same kind, at
+versions its ranges allow, and it is marked optional only when reached through an optional edge;
+every added entry is reachable from the bumped dependency; and nothing removed is still in use.
+Anything it cannot verify (a registry error, an alias, a range form it does not read, more than 400
+added entries) is not clean. Not checked: which in-range version a new transitive dependency
+resolves to (pnpm picks the newest; a lockfile may pin any version its dependent accepts).</li>
+<li>It bumps one dependency by a patch or minor version. Below 1.0 a minor bump counts as major, below
+0.1 a patch bump does too, and an unknown previous version counts as 0.x.</li>
+<li>The base branch has a gate a workflow cannot fake: a required workflow (ruleset) pinned by sha, or
+a required check bound to an app other than GitHub Actions. Any workflow's <code>GITHUB_TOKEN</code> can
+create a check run owned by GitHub Actions, so a check bound to it does not count.</li>
+<li>The PR branch has <code>update</code> and <code>non_fast_forward</code> rules, so nobody can swap its commit after the
+check while auto-merge is on.</li>
+</ul>
+<p>The workflow then turns on auto-merge, so GitHub merges the PR only once the required checks pass.
+Anything else, including any failed step, turns auto-merge off and leaves the PR to a human.</p>
+</li>
+</ul>
+<pre>qqroll dependabot --infra-config ../infra-config --write   # regenerate generated/
+qqroll dependabot --infra-config ../infra-config           # check: exit 1 if stale (presubmit runs this)</pre>
+<p>The infra-config commit the files come from is pinned in <code>infra-config.commit</code> and recorded in each
+file's header. Admin steps the land workflow needs in each repo: Dependabot version updates turned on
+(xo-space is a fork, so the config file alone doesn't enable them), "Allow auto-merge", a ruleset
+that requires the gate on <code>main</code> as a required workflow or as a check bound to a non-Actions app
+(V0-ORG-03), and a ruleset that restricts creating, updating and force-pushing <code>dependabot/**</code>
+branches so only Dependabot writes them. Auto-merge stays on after this run, and GitHub turns it off
+only for pushes by people without write access, so without that branch rule someone with write access
+could swap the PR's commit after the check. The land check confirms that rule applies to the PR branch, but it
+cannot read rulesets' bypass lists, so keeping Dependabot the only exempt actor is on the admin. xo-space has no Python lockfile yet, so its pip
+rolls only move <code>requirements*.txt</code> floors, and may open no PR at all (<code>TODO(expert)</code> in
+<code>rollers.toml</code>); the done-when is shown on innernet first.</p>
+<p>Auto-land stays off until all of these hold (ROL-R6 audit): the land check with the tree check is
+delivered to both repos (C-1; done: xo-space#219 and innernet#38 carry the current generated files); the post-v0 settings run has applied the admin steps above, with only
+Dependabot exempt from the <code>dependabot/**</code> rule (C-2); and the runners reach <code>registry.npmjs.org</code>
+(C-3; GitHub-hosted runners do). Notes for that settings run, not built here: give Dependabot a
+<code>cooldown</code> (3 to 7 days) or pnpm a <code>minimumReleaseAge</code>, since a compromised release is a valid registry
+release the tree check accepts (C-4); and keep the repos on pnpm 10 or later, which runs no dependency
+install scripts unless allowlisted, or install with scripts off in the gate (C-5). Not checked by the
+tree check: which in-range version a new transitive dependency resolves to, and added snapshots'
+<code>transitivePeerDependencies</code> and peer-suffix labels (they only name snapshots that are verified).</p>
+<h3>Toolchain pins: <code>qqroll roll</code> and <code>qqroll rotation</code> (V0-ROL-01)</h3>
+<p><code>quirq-ai/toolchains</code> records each promoted toolchain by digest in <code>promoted.toml</code> (V0-TCH-03). The
+roller reads it from a checkout of toolchains <code>main</code>, only through toolchains' own parser
+(<code>qqtc promoted-changed</code>, run as its own isolated process). With <code>--apply</code> the rotation takes only
+<code>--promoted-json</code>, made where no bot token exists (in CI, a separate job), and re-validates it. It
+then moves every repo's <code>[toolchains.*]</code> pins in <code>infra/repo.toml</code>
+to those digests in sync's <code>oci://</code> form: <code>source</code> names the image manifest by digest and <code>digest</code> is
+its one toolchain layer. The manifest is edited only through <code>qqsync</code>, so a roll changes just the pin
+and its <code>version</code> label and leaves every other byte alone.</p>
+<ul>
+<li>Only per-platform toolchain pins a manifest already has, from the image the promotion names
+(registry and repository), are moved; a roller never adds a toolchain. A pin for every platform is
+left alone, because each promoted image is for one platform. The toolchain's <code>version</code> label moves
+only when every platform ends up at that version. A promotion older than the label is not rolled,
+and a pin without a numeric version label is not rolled either, since a downgrade can't be ruled out.</li>
+<li>A roll stays inside the org-wide pin in infra-config <code>kinds.toml</code> (python <code>3.14</code>, node <code>24</code>). A new
+minor or major means moving that pin first, which is a policy change for suraj.</li>
+<li>Any pin left alone is reported and makes the command exit 1: a skipped pin needs a person and is
+never reported as current.</li>
+<li>Before <code>qqroll rotation</code> or <code>qqroll roll</code> writes a roll, it checks each new pin again, failing closed, with the same
+checks as toolchains' promotion gate: the manifest fetched with <code>oras</code> hashes to the pinned digest
+and is exactly one toolchain layer, the pinned one; and <code>gh attestation verify</code> finds build
+provenance from toolchains' <code>.github/workflows/build.yml</code> on <code>main</code>, at the pin's <code>built_from</code>. A
+repo with a pin that fails either check is not rolled.</li>
+<li><code>qqroll roll</code> edits one local manifest; it is the core that v1's <code>qq roll</code> reuses, so both make the
+same diffs. <code>--unverified</code> skips the registry checks, for offline tests only.</li>
+<li><code>qqroll rotation</code> reads <code>rollers.toml</code> (the <code>quirq-rollers</code> roller named <code>toolchains</code>), fetches each
+listed repo's manifest from its default branch, and opens or refreshes one PR on the branch
+<code>qq-roll/toolchains</code>. Repos with no manifest yet are skipped. GitHub calls sit behind
+<code>qqroll.backends</code> (<code>github</code> now, <code>launchpad</code> later); repo slugs come from infra-config <code>repos.toml</code>.</li>
+</ul>
+<pre>qqroll roll --toolchains ../toolchains --manifest infra/repo.toml --infra-config ../infra-config
+qqroll rotation --infra-config ../infra-config --toolchains ../toolchains   # dry run: checks and diffs, opens nothing
+QQ_ROLLER_TOKEN=... qqroll rotation --infra-config ../infra-config --toolchains ../toolchains --apply</pre>
+<p><code>.github/workflows/roll-toolchains.yml</code> runs the rotation weekly (the <code>rollers.toml</code> cadence), on
+<code>repository_dispatch</code> (<code>toolchain-promoted</code>) and by hand. Roll PRs need the quirq rollers App (a GitHub
+App, named quirqer on GitHub; nothing depends on the name), because PRs opened with a workflow's <code>GITHUB_TOKEN</code> trigger no workflows; without its secrets the
+workflow is a dry run. A branch that already holds the same roll is not pushed again. The registry
+checks read ghcr anonymously, so until the toolchain packages are public every roll fails closed. Auto-merge (<code>--auto-merge</code>) stays off until <code>toolchains</code> enforces review of
+promotions on its <code>main</code>, so for now a roll stops at an open PR.</p>
+<p>The roll job runs only pinned actions and packages (the runner image aside): actions by commit sha, Python packages from
+<code>requirements/roll.lock</code> by hash (<code>--require-hashes --no-deps</code>) plus qqsync and qqroll by commit, all
+installed before the bot token is minted, and the checkout keeps no credentials. The token is scoped
+to exactly the repos the toolchains roller covers (<code>qqroll repos</code>). With <code>QQ_ROLLER_TOKEN</code> set,
+<code>qqroll</code> refuses <code>--toolchains</code> and takes only <code>--promoted-json</code>, so qqtc never runs beside the token, and oras and gh run without it.</p>
+<h3>Develop</h3>
+<pre>python -m pip install -e ".[test]"
+python -m pytest -q
+# tests that read toolchains' parser or sync's fixture need checkouts (presubmit pins both):
+QQ_TOOLCHAINS=../toolchains QQ_SYNC=../sync python -m pytest -q</pre>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-ROL-02</td>
+<td>Lockfile updates (Dependabot config from <code>rollers.toml</code>)</td>
+<td>#2; delivery xo-space#213 and #219, innernet#38</td>
+<td>merged here, in xo-space and in innernet, with the lockfile tree check (ROL-R6); auto-land stays off: the land check needs a gate no workflow can fake (a required workflow pinned by sha, or a check bound to a non-Actions app), and required workflows need org rulesets, which quirq-ai's GitHub Free plan does not offer, so only a non-Actions check app could provide it there; it also needs the <code>dependabot/**</code> branch rule (C-2), which gate's settings leave off for both repos (<code>dependabot_branches = false</code>)</td>
+</tr>
+<tr>
+<td>V0-ROL-01</td>
+<td>Toolchain pin roller</td>
+<td>#3</td>
+<td>merged; xo-space and innernet now have manifests with pins; done-when waits on toolchains enforcing promotion review (gate #25's <code>promotion-gate</code>, merged in gate but not applied yet; auto-merge held off until then)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Plan and every v0 item: <code>quirq-ai/infra-config</code>, <code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>

@@ -1,0 +1,116 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo makes
+clients follow a release <strong>channel</strong> instead of <code>main</code>: it reads which commit and artifact digest
+each channel names, and documents how an install follows one.</p>
+<p>Today xo-space's <code>install.sh</code> and in-app updater follow <code>main</code>. In v0 only xo-space's <strong>test
+installs</strong> follow <code>channels/canary</code>, and only in quirq's research and test environments, never on
+real users' machines. Installer work is low priority in v0 (P4, decision D8).</p>
+<p><strong>Chromium counterpart:</strong> <code>chrome/updater</code> (Omaha), which asks which version a channel names and
+installs exactly that.</p>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>. Channels themselves are moved by
+<a href="https://github.com/quirq-ai/release" target="_blank" rel="noopener">quirq-ai/release</a>; this repo only reads them.</p>
+<h3>Resolving a channel (V0-INS-01)</h3>
+<p>The channel manifest is release's <code>channels.json</code> (schema <code>qq-channels/1</code>) on its <code>release-state</code>
+branch: per repo and channel, the commit, the artifact digest and the generation. Only release's
+executor writes it, after every channel move. <code>qqinstall</code> reads it and resolves a channel:</p>
+<pre>pip install "qqinstall @ git+https://github.com/quirq-ai/installer@&lt;commit&gt;"
+qqinstall resolve  --repo xo-space --channel canary                 # commit, digest, generation
+qqinstall resolve  --repo xo-space --channel canary --format env    # QQ_CHANNEL_COMMIT=... for scripts
+qqinstall resolve  --repo xo-space --channel canary --at &lt;release-state commit&gt;   # a fixed read
+qqinstall checkout --repo xo-space --channel canary --remote &lt;git URL&gt; --dest ./xo-space   # put an install on it
+qqinstall verify   --repo xo-space --channel canary --checkout ./xo-space [--remote &lt;git URL&gt;]
+qqinstall show                                                      # every channel</pre>
+<p>Exit codes, which scripts should decide on (never on the text): <code>0</code> resolved (or, for <code>checkout</code>
+and <code>verify</code>, the checkout is exactly the channel's commit with no local changes), <code>1</code> mismatch or
+local changes, <code>2</code> error (unreadable or invalid manifest, bad arguments, broken checkout or remote),
+<code>3</code> not published yet (no manifest, or it does not name that repo and channel). Treat anything but
+<code>0</code> as "not verified": Python itself exits <code>1</code> if qqinstall cannot start. The manifest appears only
+after release's first channel move. Release published it with the first canary on 2026-10-05, so <code>resolve --repo xo-space --channel canary</code> (and innernet) answer <code>0</code> today; website has no
+canary channel and answers <code>3</code>.</p>
+<p><code>checkout</code> clones or fetches, then detaches the checkout at the manifest's commit by its id (never
+by a branch or tag name the remote could point elsewhere) and verifies it. The commit must be on
+the remote's <code>--branch</code> (default <code>main</code>), so a manifest cannot name an unmerged commit; that is
+asked of a scratch repo fetched fresh from <code>--remote</code>, so nothing in the checkout's own <code>.git</code>
+(grafts, a local <code>url.insteadOf</code>) can change the answer. That scratch repo also ignores your
+global and system git config, so a proxy or CA set only there (<code>http.proxy</code>, <code>http.sslCAInfo</code>)
+does not apply to it: set <code>HTTPS_PROXY</code> or <code>GIT_SSL_CAINFO</code> in the environment instead (without
+them the check fails closed, exit <code>2</code>). Every symlink in the commit's tree must
+name a path that tree has (not <code>.git</code>, an ignored path, or anything outside), checked before the
+checkout moves. A shallow checkout is refused with a clear message. A first checkout that fails
+after its clone is removed (an empty <code>--dest</code> is kept, empty), so the next run starts clean.
+<code>--at</code> gets the same git hardening (CA settings kept, timeouts). It records the
+manifest's generation in the checkout's git config (<code>qqinstall.&lt;repo&gt;/&lt;channel&gt;.generation</code>) and
+refuses (exit <code>2</code>) a later <code>channels.json</code> with a lower generation, so a replayed old manifest
+cannot move an install back; a rollback is a new move with a higher generation and goes through.
+<code>resolve</code>, <code>verify</code> and <code>show</code> keep no state and cannot make that check (TODO(expert)). Anything
+running later as the same user can change the record; recovery is in
+<a href="https://github.com/quirq-ai/installer/blob/main/docs/xo-space-canary.md#things-to-know" target="_blank" rel="noopener">docs/xo-space-canary.md</a>.</p>
+<p><strong>Limits.</strong> <code>verify</code> checks the checkout's top-level commit (replace refs ignored), that its tree
+has no tracked, untracked (non-ignored) or hidden (skip-worktree, assume-unchanged) changes, and,
+with <code>--remote</code>, its <code>origin</code> as stored (before <code>url.insteadOf</code> rewrites), and refuses (exit <code>2</code>)
+symlinks to paths outside its tree. It does not check the digest (that is for artifact installs) or
+submodules, and it trusts the checkout's own <code>.git</code> (its filters, excludes and <code>core.fileMode</code> can
+hide changes or run code), so it checks an install you control, not a hostile tree. The default
+URL (<code>refs/heads/release-state</code>, so a same-named tag is never served) goes through GitHub's CDN,
+which can lag a channel move by a few minutes; <code>--at &lt;commit&gt;</code> reads a fixed version and is
+refused unless that commit is on release's <code>release-state</code> branch. Exit <code>3</code> also covers a 404 from
+a renamed or private release repo; the scheduled <code>live-manifest</code> workflow tells the two apart.</p>
+<p>Every field is checked before it is used: the schema, a 40-hex commit, a <code>sha256:</code> digest, a
+positive generation, names, no duplicate keys, a 1 MiB cap, https only (redirects too). Anything
+unexpected exits <code>2</code>, never <code>1</code>. One bad entry anywhere and the whole file is refused.</p>
+<p><strong>What it trusts.</strong> The commit and digest come from the manifest, never from the artifact or
+checkout being checked. The manifest is trusted because only release's executor should write
+<code>release-state</code>. TODO(suraj): today release pushes <code>release-state</code> with its workflows'
+<code>GITHUB_TOKEN</code>, so a ruleset cannot tell the executor from any other workflow in release. The App
+(<code>quirq-release-executor</code>) exists, and release #16 wired its writer jobs to push with its token, but
+they do not act as it yet: until suraj runs "command 2" (which sets the App's client ID in release),
+they push with <code>GITHUB_TOKEN</code>, and release-state records <code>skipped: no release executor identity</code>.
+It also needs a ruleset on <code>release-state</code> whose only bypass is that App (open gate PR #27). Until
+then anyone with push on quirq-ai/release can change what a channel resolves to.</p>
+<p><code>tools/contract_check.py</code> is the done-when: release's own code, at the commit in <code>pins.toml</code>, ships
+two canaries and rolls one back, and after each move <code>qqinstall resolve</code> must name the right commit
+and digest (and exit <code>3</code> before the first move). Presubmit runs it. The live manifest is read by the
+scheduled, non-required <code>live-manifest</code> workflow, so release's live state never blocks a PR here.</p>
+<h3>xo-space test installs on canary (V0-INS-02)</h3>
+<p>A test install checks before it runs, with no xo-space code change: <code>qqinstall checkout</code> puts
+<code>./xo-space</code> on exactly canary's commit and verifies it, then that checkout's own install.sh,
+started as <code>./xo-space/install.sh</code> from the test directory, runs it in place. Do not use <code>curl | sh</code> with <code>QUIRQ_SOURCE_REF</code> for canary: it installs whatever
+the name <code>channels/canary</code> resolves to, and nothing in that chain is verified. Commands, caveats
+and what the live half waits on: <a href="https://github.com/quirq-ai/installer/blob/main/docs/xo-space-canary.md" target="_blank" rel="noopener">docs/xo-space-canary.md</a>.
+<code>tools/canary_install_drill.py</code> runs the flow against a local stand-in repo holding xo-space's real
+<code>install.sh</code>, through two promotions, planted refs and a rollback; presubmit runs it.</p>
+<p>TODO(suraj): V0-INS-02's scope changed. v0.md says test installs follow canary "through xo-space's
+existing <code>QUIRQ_SOURCE_REF</code> override"; that flow resolves <code>channels/canary</code> by name and verifies
+nothing, so it is now forbidden for canary and installs go through <code>qqinstall checkout</code> instead.
+Please accept the change; v0.md needs the same update.</p>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-INS-01</td>
+<td>Channel manifest: resolve a channel to a commit and digest</td>
+<td>#2</td>
+<td>merged; live resolve works since release's first canary (2026-10-05)</td>
+</tr>
+<tr>
+<td>V0-INS-02</td>
+<td>xo-space test installs follow canary</td>
+<td>#3, audit fixes #5, #6</td>
+<td>merged; offline drill passes; live half waits on suraj (canary machines, <code>release-state</code> protection)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Out of scope for v0: test installs following dev (v1); real installs following a channel and a
+desktop updater evaluation (v2).</p>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/installer/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>.</p>
+<h3>Licence</h3>
+<p><a href="https://github.com/quirq-ai/installer/blob/main/LICENSE" target="_blank" rel="noopener">Apache License 2.0</a>.</p>

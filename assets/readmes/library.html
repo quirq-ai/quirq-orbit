@@ -1,0 +1,50 @@
+<p>One repo, one branch per GitHub project. This branch, <code>main</code>, is the index and the tool, and <code>attic</code> keeps the retired ones.</p>
+<h3>How it works</h3>
+<p><a href="https://github.com/quirq-ai/library/blob/claude/project-thread-152nwx/library" target="_blank" rel="noopener"><code>./library</code></a> copies projects straight from GitHub. No folders on your machine, no checkout:</p>
+<ul>
+<li><strong>Branch name = GitHub slug.</strong> <code>google-research/timesfm</code> is the <code>google-research/timesfm</code> branch. Clone it and you have the project.</li>
+<li><strong>Exact copies.</strong> The tool fetches the one upstream commit with <code>--depth 1</code> and commits its tree unchanged, so the branch's tree id is the upstream tree id. <code>./library check --upstream</code> proves it for every project.</li>
+<li><strong>Branches are orphans.</strong> They share no history with each other, with <code>main</code> or with upstream. Each commit names its upstream commit and tree in trailers (<code>Upstream-Commit</code>, <code>Upstream-Tree</code>), so the full history is one click away without being stored here.</li>
+<li><strong>Commits append.</strong> <code>./library update</code> asks GitHub for each project's current commit and only fetches the ones that moved. A new version is a child of the previous one, so git stores just the changed files. The author date is the upstream commit's date.</li>
+<li><strong>Files are stored once.</strong> Git keeps one copy of a file however many projects hold it.</li>
+<li><strong>Big or unlicensed projects become pointers.</strong> A project over the size cap (<code>limits.project_mb</code> in <a href="https://github.com/quirq-ai/library/blob/claude/project-thread-152nwx/library.json" target="_blank" rel="noopener"><code>library.json</code></a>, 50 MB) or with files over GitHub's 100 MB limit gets a branch holding only a README with its URL, commit and tree. So does a project with no open license, since this repo is public. <code>--mode lean</code> copies a big project without its files over <code>limits.lean_file_mb</code> (10 MB) and lists them in the commit message. Projects owned by an account under <code>owners</code> are always copied.</li>
+<li><strong>No secrets by accident.</strong> Before a copy is made, its files are scanned for tokens and private keys. A hit stops that project and names the file and line; <code>--allow-secrets</code> copies anyway once you have looked.</li>
+<li><strong>Your changes survive updates.</strong> Commit on top of a project's branch and the next update merges the new upstream version into your changes (a three-way merge with the previous upstream version as the base). A conflict stops that project only and names the files.</li>
+<li><strong>One push per run.</strong> All moved branches and the new index go up in one atomic push with a lease on each branch: a run lands completely or changes nothing.</li>
+</ul>
+<h3>Get a project</h3>
+<pre>git clone --single-branch --depth 1 -b &lt;owner&gt;/&lt;repo&gt; https://github.com/quirq-ai/library.git &lt;repo&gt;</pre>
+<p>or, from a checkout of <code>main</code>, <code>./library get &lt;owner&gt;/&lt;repo&gt;</code>. Never clone the whole library: every project would come with it.</p>
+<h3>Add, update and retire</h3>
+<p>Clone <code>main</code> (<code>git clone --single-branch -b main https://github.com/quirq-ai/library.git</code>), then:</p>
+<pre>./library add google-research/timesfm          # follows the default branch
+./library add owner/repo --ref v1.2.0          # or a branch, tag or commit
+./library add owner/repo --mode lean           # copy without files over 10 MB
+./library add owner/repo --mode pointer        # keep only a pointer
+./library update                               # every project whose upstream moved
+./library update owner/repo                    # just these
+./library check                                # branches match the index
+./library check --upstream                     # and upstream still serves the same trees
+./library retire owner/repo                    # squash onto attic, delete the branch
+./library index                                # rewrite this table from library.json</pre>
+<p>Every command that writes takes <code>--dry-run</code>. Descriptions come from the project's README and can be edited in <a href="https://github.com/quirq-ai/library/blob/claude/project-thread-152nwx/library.json" target="_blank" rel="noopener"><code>library.json</code></a>; the next run rewrites the table. Needs Node 20 or later and git 2.40 or later (for the merge of your changes on update).</p>
+<h3>Repo settings</h3>
+<p>Turn GitHub Actions off for this repo (Settings, Actions, General, "Disable actions"), so workflows copied with a project can never run here. Copies keep their <code>.github/workflows</code> because removing them would break the exact-copy rule, and GitHub runs a pushed branch's <code>on: push</code> workflows even when the branch is not the default one. Until <code>"actions_off": true</code> is set in <a href="https://github.com/quirq-ai/library/blob/claude/project-thread-152nwx/library.json" target="_blank" rel="noopener"><code>library.json</code></a>, the tool refuses to copy a project that has workflows. Dependabot and code scanning stay off for the same reason.</p>
+<p>The tool reads upstream without your GitHub login, so a private repo is never copied, even one under <code>owners</code>.</p>
+<h3>License</h3>
+<p>The Apache-2.0 <a href="https://github.com/quirq-ai/library/blob/claude/project-thread-152nwx/LICENSE" target="_blank" rel="noopener">LICENSE</a> covers the tool and the index on <code>main</code>. Each project branch keeps its upstream's own license files and terms; nothing here relicenses them.</p>
+<h3>Index</h3>
+<p>0 projects, 0 KB of files copied, most recently changed upstream first.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Project</th>
+<th>What it is</th>
+<th>Kept as</th>
+<th>License</th>
+<th>Size</th>
+<th>Upstream commit</th>
+<th>Updated</th>
+</tr>
+</thead>
+</table></div>

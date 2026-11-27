@@ -1,0 +1,158 @@
+<p>
+  <a href="https://github.com/quirq-ai/website/blob/main/static/quirq-icon.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/quirq-ai/website/main/static/quirq-icon.svg" alt="quirq logo" loading="lazy"></a>
+</p>
+<h2>quirq home base</h2>
+<p><strong>Everything quirq builds. One little space.</strong></p>
+<p>A desktop for the apps, experiments, tools, and open source projects in the <a href="https://github.com/quirq-ai" target="_blank" rel="noopener">quirq GitHub organization</a>. Explore a repository, read its docs, follow a project's progress, or open an app in its own window.</p>
+  
+  <img src="https://raw.githubusercontent.com/quirq-ai/website/main/docs/images/home-base-light.jpg" alt="quirq home base with its glass app icons, repository catalog, and floating dock" loading="lazy">
+<p>
+  Run locally ·
+  <a href="https://github.com/quirq-ai/website/blob/main/docs/quirq-app-mapping.md" target="_blank" rel="noopener">Map an app</a> ·
+  <a href="https://github.com/quirq-ai/website/blob/main/docs/development.md" target="_blank" rel="noopener">Development guide</a> ·
+  <a href="https://github.com/quirq-ai/website/blob/main/docs/repository-audit.md" target="_blank" rel="noopener">Repository audit</a>
+</p>
+<h3>A home for your apps</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Explore</th>
+<th>Make it yours</th>
+<th>Keep work in view</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A live catalog of public repositories, with search and type filters.</td>
+<td>Glass icons, light and dark themes, and appearance settings.</td>
+<td>Projects grouped by phase, with public build and canary state.</td>
+</tr>
+<tr>
+<td>A file tree for each repository's Markdown docs.</td>
+<td>Each app keeps its own name, color, route, and optional custom React view.</td>
+<td>Multiple windows, a floating dock, and expand, restore, minimize, and close controls.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The desktop uses <strong>Gatsby 4, React 18, and Tailwind CSS</strong>, with a shared flex-based window system and layouts that respond to each window's width. The interface adapts desktop components and artwork from <a href="https://github.com/PostHog/posthog.com" target="_blank" rel="noopener">PostHog/posthog.com</a>; its old marketing pages and service integrations have been removed.</p>
+<p>Opening a repository shows public metadata and documentation. It does not install or run its code. App websites open in launch windows when their framing policy permits it; <strong>Open in new tab</strong> remains available when a website cannot be shown here.</p>
+<h3>Run locally</h3>
+<p>Use <strong>Node.js 24.x</strong> and <strong>pnpm 10.23.0</strong>, as pinned in <a href="https://github.com/quirq-ai/website/blob/main/.nvmrc" target="_blank" rel="noopener"><code>.nvmrc</code></a> and <a href="https://github.com/quirq-ai/website/blob/main/package.json" target="_blank" rel="noopener"><code>package.json</code></a>.</p>
+<pre>git clone https://github.com/quirq-ai/website.git
+cd website
+corepack enable
+corepack prepare pnpm@10.23.0 --activate
+pnpm install --frozen-lockfile
+pnpm start</pre>
+<p>Open <a href="http://localhost:8001" target="_blank" rel="noopener">localhost:8001</a>. The development server binds to <code>127.0.0.1</code>; stop it with <code>Ctrl+C</code>.</p>
+<p>The committed snapshots are enough to start and build the site. No GitHub token, CMS account, or environment file is required.</p>
+<h3>From GitHub to the desktop</h3>
+  
+    
+      <pre>flowchart LR
+    GitHub[Public GitHub repositories] --&gt; Sync[pnpm apps:sync]
+    Sync --&gt; Snapshot[Committed snapshot]
+    Mapping[quirq.apps.json] --&gt; Catalog[Shared catalog]
+    Snapshot --&gt; Catalog
+    Catalog --&gt; Routes[Gatsby app routes]
+    Catalog --&gt; Desktop[Home · dock · search · windows]
+    GitHub --&gt; Live[Anonymous browser reads]
+    Live --&gt; Desktop
+</pre>
+    
+  
+  
+    
+      Loading
+  
+<p><strong>Built pages</strong> use <a href="https://github.com/quirq-ai/website/blob/main/src/data/quirq-repositories.json" target="_blank" rel="noopener"><code>src/data/quirq-repositories.json</code></a>, mapped by <a href="https://github.com/quirq-ai/website/blob/main/quirq.apps.json" target="_blank" rel="noopener"><code>quirq.apps.json</code></a>. Builds validate this saved data and do not fetch GitHub.</p>
+<p><strong>The browser</strong> refreshes the public repository list every five minutes while the tab is visible. Repository docs and the organization's desktop profile come from public GitHub files. New repositories can open through <code>/apps/*</code> before the next deployment. If GitHub is unavailable, the catalog keeps its last usable list.</p>
+<p>Public, non-archived repositories and forks are included by default. This organization's mapping includes <code>.github</code> too. Visibility is an explicit catalog choice; private repository metadata never belongs in the snapshots.</p>
+<h3>Give an app its own identity</h3>
+<p>Edit a repository entry in <a href="https://github.com/quirq-ai/website/blob/main/quirq.apps.json" target="_blank" rel="noopener"><code>quirq.apps.json</code></a>:</p>
+<pre>{
+    "xo-space": {
+        "name": "XO Space",
+        "path": "/xo-space",
+        "icon": "planet",
+        "color": "purple",
+        "featured": true,
+        "window": { "width": 1080, "height": 760 }
+    }
+}</pre>
+<p>Choose an icon, color, description, route, visibility, launch destination, or a custom template under <code>src/templates/</code>. Repository types come from the organization's <code>role</code> property on GitHub. Type filters, badges, and ordering appear once three types are in use; search always matches types. Keep app choices in the mapping so Home, desktop icons, search, and routes agree.</p>
+<p>The <a href="https://github.com/quirq-ai/website/blob/main/docs/quirq-app-mapping.md" target="_blank" rel="noopener">app mapping guide</a> covers every setting, live updates, documentation links, and launch-window framing rules. A destination's security headers decide whether it can be embedded; exact trusted quirq.dev origins can be configured through <code>frameOrigins</code>.</p>
+<p>To refresh the built catalog:</p>
+<pre>pnpm apps:sync
+pnpm apps:check</pre>
+<p>Review and commit the generated snapshot. Restart Gatsby after changing routes, then rebuild and deploy to refresh server-rendered pages. After hiding a repository, run <code>pnpm apps:sync</code> or the offline <code>pnpm apps:prune</code> to remove its README from the bundled snapshot.</p>
+<h3>Follow projects from idea to use</h3>
+<p><a href="https://github.com/quirq-ai/website/blob/main/src/pages/projects.tsx" target="_blank" rel="noopener"><code>/projects</code></a> lists the repositories whose type (the organization's <code>role</code> property) is project, grouped using <a href="https://github.com/quirq-ai/website/blob/main/quirq.projects.json" target="_blank" rel="noopener"><code>quirq.projects.json</code></a>. Phases come from repository evidence:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Thought</th>
+<th>Prototype</th>
+<th>Built</th>
+<th>Shipping</th>
+<th>In use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Notes or a README.</td>
+<td>Real code.</td>
+<td>Code with CI.</td>
+<td>Built and onboarded to qq, deployed, or in the canary.</td>
+<td>At least 10 stars or 5 people committing, checked first.</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>pnpm projects:sync</code> refreshes the committed phase snapshot using public repository trees, star counts, and aggregate contributor counts. It stores no contributor names or emails. A manual phase override needs a <code>phaseReason</code>. Every public repository must belong to a group or be explicitly hidden.</p>
+<p>The <code>/v0</code> app explains quirq infra and shows its public live state. See the <a href="https://github.com/quirq-ai/website/blob/main/docs/development.md#quirq-infra" target="_blank" rel="noopener">development guide</a> for workflow ownership.</p>
+<h3>Work on the site</h3>
+<pre>pnpm apps:check
+pnpm projects:check
+pnpm source:check
+pnpm test
+pnpm build</pre>
+<p>Preview the production output with <code>pnpm serve -H 127.0.0.1 -p 9000</code>. Before handing off UI changes, check wide and narrow windows in both themes, search, direct app routes, and the window lifecycle. Format only changed files.</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Start here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Catalog and live data</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/src/lib/quirqApps.ts" target="_blank" rel="noopener"><code>src/lib/quirqApps.ts</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/src/lib/quirqLiveApps.ts" target="_blank" rel="noopener"><code>src/lib/quirqLiveApps.ts</code></a></td>
+</tr>
+<tr>
+<td>Catalog validation and snapshots</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/scripts/lib/quirq-catalog.mjs" target="_blank" rel="noopener"><code>scripts/lib/quirq-catalog.mjs</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/scripts/sync-quirq-apps.mjs" target="_blank" rel="noopener"><code>scripts/sync-quirq-apps.mjs</code></a></td>
+</tr>
+<tr>
+<td>Desktop and navigation</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/src/components/Desktop" target="_blank" rel="noopener"><code>Desktop</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/src/components/Dock/README.md" target="_blank" rel="noopener"><code>Dock</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/src/components/HomeBase/README.md" target="_blank" rel="noopener"><code>HomeBase</code></a></td>
+</tr>
+<tr>
+<td>Repository docs and launches</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/src/components/QuirqApp/README.md" target="_blank" rel="noopener"><code>QuirqApp</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/src/templates/quirq-launch.tsx" target="_blank" rel="noopener"><code>src/templates/quirq-launch.tsx</code></a></td>
+</tr>
+<tr>
+<td>Window state and controls</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/src/context/App.tsx" target="_blank" rel="noopener"><code>src/context/App.tsx</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/src/components/AppWindow" target="_blank" rel="noopener"><code>AppWindow</code></a></td>
+</tr>
+<tr>
+<td>Routes and hosting</td>
+<td><a href="https://github.com/quirq-ai/website/blob/main/gatsby-node.ts" target="_blank" rel="noopener"><code>gatsby-node.ts</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/gatsby-config.js" target="_blank" rel="noopener"><code>gatsby-config.js</code></a>, <a href="https://github.com/quirq-ai/website/blob/main/vercel.json" target="_blank" rel="noopener"><code>vercel.json</code></a></td>
+</tr>
+</tbody>
+</table></div>
+<p>Read <a href="https://github.com/quirq-ai/website/blob/main/AGENTS.md" target="_blank" rel="noopener"><code>AGENTS.md</code></a> and the relevant component README before editing shared code. The <a href="https://github.com/quirq-ai/website/blob/main/docs/development.md" target="_blank" rel="noopener">development guide</a> covers commands, environment variables, deployment, and troubleshooting. The <a href="https://github.com/quirq-ai/website/blob/main/docs/repository-audit.md" target="_blank" rel="noopener">repository audit</a> records the cleanup, intentionally retained upstream material, and verification limits.</p>
+<p>Optional analytics and error tracking use quirq's own PostHog project. Set the public <code>GATSBY_POSTHOG_KEY</code> at build time to enable pageviews, clicks, and uncaught error reporting through the <code>/ingest</code> rewrites. Without a key, the browser loads no analytics script. See <a href="https://github.com/quirq-ai/website/blob/main/docs/development.md#environment-variables" target="_blank" rel="noopener">environment variables</a> and <a href="https://github.com/quirq-ai/website/blob/main/.example.env" target="_blank" rel="noopener"><code>.example.env</code></a>.</p>
+<h3>Attribution and licensing</h3>
+<p>quirq's original additions retain the <a href="https://github.com/quirq-ai/website/blob/main/LICENSE" target="_blank" rel="noopener">Apache 2.0 license</a>. Inherited desktop code and artwork retain the separate <a href="https://github.com/quirq-ai/website/blob/main/LICENSE.posthog" target="_blank" rel="noopener">upstream terms</a>, including their website reuse restriction. Third-party vendored code keeps its own notices. The quirq name, marks, and approved brand art are reserved.</p>
+<p>Read <a href="https://github.com/quirq-ai/website/blob/main/LICENSING.md" target="_blank" rel="noopener">LICENSING.md</a> before reusing or redistributing this repository. Adding quirq branding does not relicense inherited material.</p>

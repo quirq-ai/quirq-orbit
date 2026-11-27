@@ -1,0 +1,271 @@
+<a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/logo.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/logo.svg" alt="Argus logo" loading="lazy"></a>
+<h2>Argus</h2>
+<p><strong>The observability console for Claude Code and Codex, local-first, permanent, and honest about cost.</strong></p>
+<p>
+  <b>Quick start</b> ·
+  <b>Tour</b> ·
+  <b>CLI</b> ·
+  <b>Privacy</b> ·
+  <a href="https://github.com/quirq-ai/argus-code/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener"><b>Architecture</b></a> ·
+  <a href="https://github.com/quirq-ai/argus-code/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener"><b>Contributing</b></a>
+</p>
+<p>
+  <a href="https://pypi.org/project/argus-code/" target="_blank" rel="noopener"><img src="https://img.shields.io/pypi/v/argus-code?color=f0883e" alt="PyPI" loading="lazy"></a>
+  <a href="https://pypi.org/project/argus-code/" target="_blank" rel="noopener"><img src="https://img.shields.io/pypi/dm/argus-code?color=f0883e" alt="PyPI downloads" loading="lazy"></a>
+  <img src="https://img.shields.io/badge/python-%E2%89%A5%203.11-blue" alt="Python ≥ 3.11" loading="lazy">
+  <a href="https://github.com/quirq-ai/argus-code/blob/main/LICENSE" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" loading="lazy"></a>
+  <a href="https://github.com/KrishBhimani/argus-code" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/KrishBhimani/argus-code?style=flat&amp;logo=github&amp;color=8b94a3" alt="GitHub stars" loading="lazy"></a>
+</p>
+<p>Claude Code and OpenAI Codex write a detailed transcript of every session to disk
+(<code>~/.claude/</code>, <code>~/.codex/</code>), every turn, every token, every tool call, every sub-agent
+they spawned, and then tell you almost nothing about it. Argus tails those files into
+a SQLite archive on your machine, prices each turn, and serves a dashboard at
+<code>http://localhost:4242</code> that answers the questions the transcripts never do: <em>what am I
+spending, where did it go, and which turn made it so?</em></p>
+<p>Nothing leaves your computer. No telemetry, no API calls, no embeddings, SQLite and a
+static web app, bound to <code>127.0.0.1</code>.</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/hero.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/hero.png" alt="The Argus overview, tokens, cost, sessions and tool error rate at a glance" loading="lazy"></a></p>
+<h3>🚀 Quick start</h3>
+<pre>pipx install argus-code     # or:  uv tool install argus-code
+argus start</pre>
+<p>Your browser opens once the first pass finishes (5-10 s for a typical install). From
+then on, every session you run is ingested live. All you need is Python ≥ 3.11 and a
+<code>~/.claude/</code> directory or a Codex home, i.e. you've used Claude Code or Codex at least once.</p>
+<p><strong>Supported agents.</strong> Argus detects whichever you use, no configuration needed:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Reads from</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Claude Code</strong></td>
+<td><code>~/.claude/</code> (session transcripts under <code>projects/</code>, prompt history)</td>
+<td>Sessions, sub-agents and your typed prompts.</td>
+</tr>
+<tr>
+<td><strong>OpenAI Codex</strong></td>
+<td><code>$CODEX_HOME</code> (default <code>~/.codex</code>), only <code>sessions/</code> and <code>archived_sessions/</code></td>
+<td>Never opens <code>auth.json</code>, config or state databases. Costs use OpenAI's standard-tier API rates, an API-equivalent figure, since Codex plans are usually billed by subscription.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Use both and the Sessions page gains an agent filter and column.</p>
+<h3>✨ Why Argus</h3>
+<p><strong>It does forensics, not just totals.</strong> Argus keeps the <em>structure</em> of every session, turns, tool calls, sub-agents, cache reads, not just its sums. So you can find the
+turn that blew the budget, the tool that quietly started failing last Tuesday, and
+exactly what a sub-agent was told before it went off the rails.</p>
+<p><strong>It watches for you.</strong> Detectors re-check your data every 10 minutes against
+historical baselines and file alerts, a tool whose error rate doubles, a project whose
+weekly spend triples, a prompt cache that quietly stopped hitting, all flagged the day
+it happens, not when you happen to notice.</p>
+<p><strong>It accumulates.</strong> Usage tools like <code>ccusage</code> read what's on disk <em>right now</em>, and
+Claude Code rotates its own logs (<code>cleanupPeriodDays</code>, default 30), so "right now" is
+a sliding month. Once Argus has ingested a session into <code>~/.argus/argus.db</code> the row
+stays forever; a few months in, Argus remembers sessions Claude has already forgotten.</p>
+<h3>🔭 A tour</h3>
+<h4>Every session, priced</h4>
+<p>A virtualised, sortable grid of every session you've ever run, with inline token bars
+and a <strong>duration × tokens scatter</strong> (log, log, coloured by model) that makes outliers
+obvious. Filter by text, project, model or time window; export to CSV.</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/sessions.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/sessions.png" alt="Sessions, sortable grid with duration × tokens scatter" loading="lazy"></a></p>
+<h4>Session forensics</h4>
+<p>Click a session and you get its <strong>shape</strong>, one bar per turn, cache reads beneath fresh
+tokens, failing turns in red, click a bar to jump, plus a cumulative-cost line, a tool
+mix with error segments, and a timeline where every turn expands into its tool calls,
+sizes, status and error text inline. Resumed sessions are stitched into one
+chronological thread.</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/session-detail.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/session-detail.png" alt="Session detail, per-turn shape, cumulative cost, tool mix" loading="lazy"></a></p>
+<h4>Sub-agent X-ray</h4>
+<p>When a session delegates to sub-agents, Argus keeps each one: the <strong>task as it was
+given</strong>, its tools, tokens, cost, shape and full timeline, with an at-a-glance strip
+that turns red where an agent failed. No more guessing what that <code>Task</code> or
+<code>spawn_agent</code> call actually did.</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/subagents.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/subagents.png" alt="Sub-agents, task given, tools used, per-agent shape and cost" loading="lazy"></a></p>
+<h4>Trends that use rates, not totals</h4>
+<p>This period vs last, a monthly run-rate projection, tokens per session, cache-read
+share, and <strong>$ per million tokens as you actually experienced it</strong>, so you can tell
+"I'm working more" apart from "each session got more expensive".</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/trends.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/trends.png" alt="Trends, weekly tokens by model, run rate, unit cost" loading="lazy"></a></p>
+<h4>Tool health</h4>
+<p>A leaderboard of every tool with its error share, calls per day stacked by tool, MCP
+servers, and sub-agent invocations by type. Three detectors re-check the last 7 days
+against a 4-week baseline every 10 minutes and file an <strong>alert</strong> when a tool's failures
+double (<code>tool_error_rate_spike</code>), when a project's weekly spend multiplies
+(<code>cost_spike</code>), or when its prompt-cache hit rate falls off a cliff
+(<code>cache_hit_drop</code>), so you notice the day something breaks, not the week after.</p>
+<p><a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/tools.png" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/screenshots/tools.png" alt="Tools, leaderboard with error segments and calls per day" loading="lazy"></a></p>
+<h4>Full-text search <em>(opt-in)</em></h4>
+<p>Search every prompt you've typed <strong>and</strong> every assistant reply, thinking block and tool
+output. SQLite FTS5, sub-millisecond, lexical, deterministic, offline. Off by default;
+see Privacy.</p>
+<h4>House rules</h4>
+<p>Every chart follows a few rules: one axis per chart, a legend whenever there's more than
+one series, status colours always paired with an icon and a label, and a table view
+behind every chart. Tokens are exact; costs are estimates, and the UI says so.</p>
+<h3>💻 CLI</h3>
+<pre>argus start                 # watcher + ingester + dashboard at :4242
+argus daemon start          # keep ingesting in the background (argusd)
+argus indexing enable       # opt in to full-text transcript search
+argus pricing refresh       # pull latest model prices from LiteLLM
+argus claude init           # scaffold a good .claude/ setup into a project
+argus wipe                  # delete ~/.argus/ entirely</pre>
+<p><code>--help</code> works at every level.</p>
+<details>
+<summary><b>Full command tree</b></summary>
+<pre>argus                                   # top-level command group
+├─ start [--port 4242] [--host 127.0.0.1] [--data-dir &lt;path&gt;]
+│                                       # watcher + ingester + dashboard server
+├─ pricing
+│  └─ refresh                           # pull latest model prices from LiteLLM
+├─ indexing                             # (was `search`, still works, hidden alias)
+│  ├─ status                            # is transcript indexing on?
+│  ├─ enable                            # turn it on (next start backfills)
+│  ├─ disable                           # turn it off, keep data
+│  └─ clear                             # wipe all indexed segments + disable
+├─ claude                               # scaffold &amp; manage .claude/ setups
+│  ├─ init [path] [--template &lt;name&gt;] [--force]
+│  │                                    # stamp CLAUDE.md + .claude/ into a project
+│  └─ template
+│     ├─ list                           # list templates (bundled + user)
+│     └─ create &lt;name&gt; [--path &lt;dir&gt;] [--all]
+│                                       # save a project's .claude/ as a template
+├─ daemon                               # argusd, background ingestion + detectors
+│  ├─ start                             # start argusd detached, write PID file
+│  ├─ stop                              # stop argusd gracefully
+│  ├─ restart                           # stop then start
+│  ├─ status                            # running? PID + uptime
+│  └─ logs [-n N] [-f]                  # tail ~/.argus/argusd.log
+└─ wipe                                 # delete ~/.argus/ entirely</pre>
+</details>
+<details>
+<summary><b><code>argus daemon</code>, keep ingesting when the dashboard is closed</b></summary>
+<p>By default the watcher and detector scheduler run <em>inside</em> <code>argus start</code>; close it and
+ingestion stops. <strong>argusd</strong> moves that work into a long-running background process. It
+does not serve the dashboard, port 4242 is still only bound by <code>argus start</code>.</p>
+<pre>argus daemon start      # run argusd in the background (survives closing the terminal)
+argus daemon status     # PID + uptime
+argus daemon logs -f    # follow the log
+argus daemon stop</pre>
+<p><strong>Coexistence.</strong> When argusd is running, <code>argus start</code> sees its PID file and becomes a
+read-only viewer of the database the daemon keeps fresh (the sidebar footer says
+<em>argusd daemon</em>). When it isn't, <code>argus start</code> ingests in-process exactly as before.</p>
+<p><strong>Living with it.</strong> Idle cost is negligible: the watcher is event-driven and the
+scheduler wakes every 10 minutes, expect ~40-70 MB RAM and no idle CPU. Logs rotate at
+~1 MB × 3 in <code>~/.argus/argusd.log</code>. Things to know:</p>
+<ul>
+<li><strong>Restart after upgrading</strong> (<code>argus daemon restart</code>), a running daemon holds the old code.</li>
+<li><strong>No auto-restart yet.</strong> A crashed daemon stays down until you start it again; the stale PID file is cleaned up. OS-native autostart (<code>argus install</code>) is a follow-up.</li>
+<li><strong>If argusd dies while a read-only dashboard is open</strong>, the footer keeps saying <em>argusd</em> and ingestion pauses until you restart the dashboard, which then resumes in-process.</li>
+<li><strong>Windows <code>stop</code> is a hard kill</strong>, safe (no critical in-memory state), but no <code>argusd stopped.</code> line lands in the log.</li>
+<li><strong>Toggling search:</strong> the dashboard's <em>Enable indexing</em> button indexes immediately; the CLI <code>argus indexing enable</code> flips the flag and backfills on the next <code>argus start</code> / <code>argus daemon restart</code>.</li>
+</ul>
+</details>
+<details>
+<summary><b><code>argus claude</code>, scaffold good agent config</b></summary>
+<p>Set things up well <em>before</em> you run, not just observe afterwards. <code>init</code> copies a
+template into a project: <code>CLAUDE.md</code> to the root, everything else into <code>.claude/</code>.
+Existing files are skipped (<code>--force</code> overwrites, except <code>CLAUDE.md</code>, which is never
+overwritten). The bundled <code>default</code> template ships a sensible <code>settings.json</code>, agents,
+commands, rules and a placeholder skill. Save your own project's setup with
+<code>template create</code>; user templates live in <code>~/.argus/templates/</code> and win over bundled
+ones.</p>
+</details>
+<h3>🔒 Privacy &amp; security</h3>
+<p>Argus is built for one person on one machine, and the defaults say so.</p>
+<ul>
+<li><strong>Binds to <code>127.0.0.1</code> only.</strong> Nothing on your LAN, Wi-Fi or VPN can reach it. <code>--host 0.0.0.0</code> exists, and prints a loud warning.</li>
+<li><strong>No external requests, ever</strong>, except <code>argus pricing refresh</code>, a manual command that fetches one JSON file from LiteLLM's GitHub. No telemetry, no analytics, no LLM calls.</li>
+<li><strong>Transcript indexing is opt-in.</strong> Cost and token analytics need no text content. Full-text search over prompts and transcripts requires an explicit opt-in (Settings or <code>argus indexing enable</code>), and opting out means the API returns nothing even if data is on disk.</li>
+<li><strong>Cross-origin writes are rejected.</strong> State-changing endpoints check the <code>Origin</code> header against Argus's own origin, exactly, so neither a random tab nor another localhost app can flip your settings.</li>
+<li><strong>A loopback <code>Host</code> header is required.</strong> This defeats DNS rebinding, where a site you visit repoints its domain at <code>127.0.0.1</code> to read your history. Anything else gets a 421 (skipped only when you deliberately bind <code>0.0.0.0</code>).</li>
+<li><strong>Transcript text never becomes HTML.</strong> The dashboard renders every transcript-derived string as text; a test forbids raw-HTML sinks in the source.</li>
+<li><strong>No embeddings, no model weights.</strong> Search is a plain inverted index.</li>
+</ul>
+<p>Your data is one file, <code>~/.argus/argus.db</code>. <code>argus wipe</code> deletes it; so does <code>rm</code>.
+Vulnerability reports: <a href="https://github.com/quirq-ai/argus-code/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+<h3>⚙️ How it works</h3>
+<ol>
+<li><strong>Ingest.</strong> A <code>watchdog</code> observer tails each agent's transcripts through a per-agent adapter, Claude Code's <code>~/.claude/projects/&lt;project&gt;/&lt;session&gt;.jsonl</code> and Codex's rollouts under <code>$CODEX_HOME/sessions/</code>. Lines are validated, de-duplicated by the agent's own ids (Claude's <code>message.id</code>, Codex's <code>response_id</code>), and normalised into session / turn rows in SQLite (WAL mode). Resumed or continued sessions and sub-agent files are folded into their parent.</li>
+<li><strong>Cost.</strong> Per-turn cost comes from a bundled price table (Anthropic's and OpenAI's published rates; <code>argus pricing refresh</code> can pull <a href="https://github.com/BerriAI/litellm" target="_blank" rel="noopener">LiteLLM</a>'s). Tokens are exact; costs are estimates.</li>
+<li><strong>Tools.</strong> For Claude Code, each <code>tool_use</code> block becomes a row and errors come from the matching <code>tool_result</code>; for Codex, each completed action (shell command with its exit code, file change, MCP call, web search, <code>spawn_agent</code>) becomes a row, with errors only from explicit failure signals. MCP servers are shown as <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>; sub-agent types are kept so delegation is visible.</li>
+<li><strong>Search (opt-in).</strong> Two FTS5 tables, one over your prompt history, one over transcript text, indexed incrementally during the normal ingest tick.</li>
+<li><strong>Detection.</strong> A scheduler runs registered <em>detectors</em> every 10 minutes; findings land in an alerts inbox with a seen / resolved lifecycle, so an issue that recovers and recurs fires again instead of staying silent.</li>
+<li><strong>Dashboard.</strong> A Vite + React single-page app (uPlot and hand-drawn SVG charts), statically built and served by the FastAPI app. No Node at runtime, no network beyond <code>/api/*</code>.</li>
+</ol>
+<p>Want the deeper tour? <a href="https://github.com/quirq-ai/argus-code/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener">ARCHITECTURE.md</a>.</p>
+<h3>🔧 Configuration</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Where</th>
+<th>Knob</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>argus start --port &lt;n&gt;</code></td>
+<td>Port (default 4242).</td>
+</tr>
+<tr>
+<td><code>argus start --host &lt;h&gt;</code></td>
+<td>Bind host (default <code>127.0.0.1</code>; <code>0.0.0.0</code> for LAN exposure).</td>
+</tr>
+<tr>
+<td><code>argus start --data-dir &lt;path&gt;</code></td>
+<td>Override <code>~/.argus/</code>.</td>
+</tr>
+<tr>
+<td><code>argus pricing refresh</code></td>
+<td>Fetch the latest price table into <code>~/.argus/pricing/</code> (newest table wins).</td>
+</tr>
+</tbody>
+</table></div>
+<h4>Keep more history in Claude Code itself</h4>
+<p>Claude Code deletes session files after 30 days by default. Raise it in
+<code>~/.claude/settings.json</code> (minimum 1; it can't be disabled):</p>
+<pre>{ "cleanupPeriodDays": 365 }</pre>
+<p>Argus keeps its own copy regardless, this only widens what Claude itself retains.</p>
+<h3>📋 Requirements</h3>
+<ul>
+<li><strong>Python ≥ 3.11</strong> with an FTS5-enabled <code>sqlite3</code> (the standard CPython builds for macOS, Linux and Windows all are; Argus checks at startup and says so clearly if not).</li>
+<li>A <code>~/.claude/</code> directory with real session JSONL, or a Codex home (<code>$CODEX_HOME</code>, default <code>~/.codex</code>) with rollouts under <code>sessions/</code>.</li>
+</ul>
+<h3>🛠️ Development</h3>
+<pre>git clone https://github.com/KrishBhimani/argus-code.git
+cd argus-code
+uv sync               # install deps + create venv
+uv run pytest         # ~700 tests, ~45 s
+uv run argus start    # runs directly from source</pre>
+<p>Dashboard work happens in <code>dashboard/</code> (Vite + React): <code>npm install &amp;&amp; npm run dev</code>
+proxies <code>/api</code> to a running <code>argus start</code>; <code>npm test</code>, <code>npm run build</code>, <code>npm run size</code>
+and <code>npm run e2e</code> are the gates. The built copy in <code>dashboard-dist/</code> ships inside the
+wheel, so end users never touch <code>npm</code>. See <a href="https://github.com/quirq-ai/argus-code/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a>.</p>
+<details>
+<summary><b>Repository layout</b></summary>
+<pre><code>python/argus/         Python ingest, store, server, CLI
+  adapters/           Claude Code + Codex parsers + adapter registry
+  store/              SQLite schema + migrations + repo
+  server/             FastAPI app + /api routes
+  collector/          watcher + pipeline + first-run + search backfill + alert scheduler
+  core/               CoreRuntime, shared watcher+scheduler+ingest lifecycle
+  daemon/             argusd: pidfile, foreground service, process control, logging
+  detectors/          alert detectors (pure reads) + @register registry
+  scaffold/           `argus claude` template storage / init / snapshot
+  pricing/            LiteLLM-derived price table + cost compute
+  schema/             pydantic data models
+dashboard/            React SPA source (Vite)
+dashboard-dist/       Vite build output (shipped in wheel as data)
+pricing/              Bundled pricing JSON (shipped in wheel as data)
+templates/            Bundled .claude/ scaffolding templates (shipped in wheel as data)
+tests/                pytest suite, mirrors python/argus/ layout
+</code></pre>
+</details>
+<hr>
+<a href="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/logo.svg" target="_blank" rel="noopener"><img src="https://raw.githubusercontent.com/KrishBhimani/argus-code/main/assets/logo.svg" alt="" loading="lazy"></a>
+<p>MIT, see <a href="https://github.com/quirq-ai/argus-code/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>
+<p><i>Named for Argus Panoptes, the watchman with a hundred eyes, who never slept.</i></p>
+<p>If it keeps good watch for you, a ⭐ helps other Claude Code and Codex users find it.</p>

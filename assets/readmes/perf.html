@@ -1,0 +1,119 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo records
+performance on every post-submit commit, so v1 can alert on regressions and v2 can bisect them.</p>
+<p><strong>Chromium counterpart:</strong> the chrome.perf waterfall, the perf dashboard and Pinpoint. v0 only
+records numbers; it does not alert or bisect.</p>
+<h3>How it works (v0)</h3>
+<ul>
+<li>Every number is stored raw, with its unit and the runner type it was measured on, because shared
+CI runners are noisy. Comparing numbers is v1's job.</li>
+<li>The benchmarks are declared in <code>quirq-ai/infra-config</code> (<code>config/perf.toml</code>): <code>xo-space-server-start</code>
+and <code>innernet-search</code>. Kind-specific <code>bench</code> code belongs in <code>quirq-ai/recipes</code> adapters, not here.</li>
+<li>Every record is written as a <code>quirq-ai/test-pipelines</code> results bundle: a Run for the measured
+repo and commit with one Result (<code>perf::&lt;metric&gt;</code>) whose <code>metrics</code> hold the values as
+<code>{value, unit}</code>, and a <code>raw</code> JSON with the runner type, toolchains and any raw samples. Its
+scorecard workflow collects them into the results store (V0-TST-02).</li>
+<li>v0 numbers are a record, not a regression signal: one measurement per commit on shared runners,
+few samples, no baseline run beside it. Do not gate or alert on them; that needs v1's repeated,
+A/B runs.</li>
+</ul>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>The perf workflow</h3>
+<p><code>.github/workflows/perf.yml</code> runs every 30 minutes (or on dispatch). For each measurement it takes
+the newest commit on the product repo's <code>main</code> (first parent) that has no record yet, so a backlog
+drains one commit per run (48 runs a day at best; fewer when runs are slow, delayed or retrying
+failures). Every commit on <code>main</code> since the oldest one recorded is owed a record and stays pending
+until it has one, however far back it falls: no commit drops out of a window. The delay has no
+bound while main lands faster than runs measure (newest first, so the oldest wait longest), a
+commit that fails three times is given up, and commits that landed before perf first measured a
+stream are not owed one. Each run writes the backlog (<code>qqperf backlog</code>) to its summary and warns
+when more than a day of runs is pending:</p>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Item</th>
+<th>Repo</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build-size</code></td>
+<td>V0-PRF-02</td>
+<td>innernet</td>
+<td>the <code>.next</code> output: client static bytes and files, JS and CSS raw and gzipped, fonts, server bytes, total without cache, traces and build-time chunks, the JS every route loads first, legacy polyfills apart</td>
+</tr>
+<tr>
+<td><code>xo-space-server-start</code></td>
+<td>V0-PRF-01</td>
+<td>xo-space</td>
+<td>seconds from starting the server until it answers, over 5 starts (p50, p90, min, max)</td>
+</tr>
+<tr>
+<td><code>innernet-search</code></td>
+<td>V0-PRF-01</td>
+<td>innernet</td>
+<td>milliseconds per search request on the demo build (fixed committed index), 30 requests over 3 queries</td>
+</tr>
+</tbody>
+</table></div>
+<p>Builds and benchmarks go through recipes' adapters (<code>build</code>, and <code>bench</code> with <code>params.bench</code>), on
+the pinned Python, Node and pnpm. A failed build or benchmark is recorded as failed and retried by
+later runs, up to three failed records per commit. GitHub turns off a scheduled workflow after 60
+days without repo activity; re-enable it in the Actions tab.</p>
+<p>Each record goes two places. This repo's <a href="https://github.com/quirq-ai/perf/tree/perf-data" target="_blank" rel="noopener"><code>perf-data</code></a> branch keeps the
+records as JSON Lines, one file per repo and metric (schema <code>qq-perf-record/1</code>); it is also how a
+run knows what is already measured. Lines are never edited, and a commit gets at most one <code>ok</code>
+record. The results store is the system of record: <code>.github/workflows/perf-publish.yml</code> turns the
+records each perf run stored into results bundles (<code>qq-results-*</code> artifacts) for the scorecard to
+collect.</p>
+<p>Trust: the <code>measure</code> jobs run product code and its dependencies, so they get read access only and
+their records are claims. They upload only a ledger. The <code>store</code> job, which runs no product code,
+accepts a ledger only for its own leg's repo and metric, only for commits still pending on that
+repo's <code>main</code>, only for records naming this run, and only finite values of at least 0, then pushes
+<code>perf-data</code>. perf-publish runs after perf completes, from the default branch, only for a run of
+perf.yml whose commit is on <code>main</code> while no tag is named <code>main</code>, reads only <code>perf-data</code>, and is the
+only workflow that uploads results bundles; test-pipelines collects perf bundles from it alone.
+The tag check holds only while perf-publish runs, so whoever can push to <code>perf-data</code> or create a
+<code>main</code> tag can still publish numbers, until rulesets protect both (S13).</p>
+<pre>qqperf pending --store DIR --repo innernet --checkout PATH        # landed commits with no record
+qqperf backlog --store DIR --repo innernet --checkout PATH        # how many are owed, and the oldest
+qqperf record build-size --store DIR --repo innernet --checkout PATH --dist PATH/.next --runner LABEL
+qqperf history --store DIR --repo innernet [--value static_js_gzip_bytes] [--json]
+qqperf merge --store DIR --from DIR --repo innernet [--metric M] [--commit SHA]... [--run-url URL]
+qqperf record bench --store DIR --repo xo-space --checkout PATH --benchmark xo-space-server-start \
+  --target server --bench-dir OUT/bench --runner LABEL
+qqperf bundle --store DIR --repo innernet --metric build-size --run-url URL --results-out DIR
+qqperf manifest --base repo.toml --target app --params '{"bench": {...}}' --out bench.toml</pre>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-PRF-02</td>
+<td>Build-size record for Next.js apps</td>
+<td>#2</td>
+<td>merged; innernet history on <a href="https://github.com/quirq-ai/perf/blob/perf-data/innernet/build-size.jsonl" target="_blank" rel="noopener"><code>perf-data</code></a> since run <a href="https://github.com/quirq-ai/perf/actions/runs/37202550498" target="_blank" rel="noopener">37202550498</a></td>
+</tr>
+<tr>
+<td>V0-PRF-01</td>
+<td><code>bench</code> capability and storage</td>
+<td>recipes#10, #4, #5</td>
+<td>merged; first records from run <a href="https://github.com/quirq-ai/perf/actions/runs/37204645471" target="_blank" rel="noopener">37204645471</a>, in test-pipelines' results store. Polls <code>main</code> until product post-submit exists (V0-GAR-01)</td>
+</tr>
+</tbody>
+</table></div>
+<p>As of 2026-10-07, the newest record on <code>perf-data</code> is from 2026-10-05 (run 37359203431): GitHub is
+throttling the scheduled runs, so commits since then are still pending.</p>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/perf/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks with <code>python -m pytest</code>.</p>
+<h3>Licence</h3>
+<p><a href="https://github.com/quirq-ai/perf/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>.</p>

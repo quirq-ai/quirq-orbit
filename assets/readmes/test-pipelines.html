@@ -1,0 +1,505 @@
+<p>Part of <strong>quirq infra</strong> ("qq"), quirq-ai's CI/CD system for repos in any language. This repo turns
+test output into stored results and mechanical verdicts.</p>
+<p><strong>Chromium counterpart:</strong> ResultDB (the results store and its ResultSink) and LUCI Analysis
+(verdicts, flake handling and failure clustering).</p>
+<h3>What it holds (plan §5.4, §5.10)</h3>
+<ul>
+<li><strong>Result</strong>: one test or action outcome, write-once, normalized. JUnit XML is the input,
+which every test adapter in <code>quirq-ai/recipes</code> emits.</li>
+<li><strong>Run</strong>: one gate or post-submit attempt that produced Results.</li>
+<li><strong>Verdict</strong>: computed mechanically from Results. Failed tests are retried, then run without the
+change; only failures that pass without the change fail it.</li>
+<li><strong>Failure</strong>: one record per held canary, canary rollback or auto-revert, mirrored to a labelled
+GitHub issue, linking culprit, operation and fix.</li>
+<li><strong>Scorecard v0</strong>: a script that computes plan §8's metrics from the store.</li>
+</ul>
+<p>v0 has no cloud, so storage sits behind a <code>backend</code> interface. Retry policy comes from
+infra-config's <code>flakes.toml</code>.</p>
+<p>Plan and every v0 item: <a href="https://github.com/quirq-ai/infra-config" target="_blank" rel="noopener">quirq-ai/infra-config</a>,
+<code>docs/plan.md</code> and <code>docs/v0.md</code>.</p>
+<h3>Storing a job's results (V0-TST-01)</h3>
+<p>Add the sink after the test steps of any builder, pinned by commit:</p>
+<pre>- uses: quirq-ai/test-pipelines/sink@&lt;commit&gt;
+  if: always()
+  with:
+    junit: .qq/out/junit/*.xml     # one glob per line
+    name: ${{ strategy.job-index }} # only under a matrix, so each leg's run is distinct</pre>
+<p>A dispatched run that checks out another commit than <code>GITHUB_SHA</code> (a backfill) passes
+<code>commit: ${{ inputs.commit || github.sha }}</code> and <code>kind: postsubmit</code>; the commit must be 40 hex.
+A run whose commit differs from <code>GITHUB_SHA</code> is stored with role <code>backfill</code>: queryable, but left
+out of the scorecard, since it finished long after its commit landed. One job that backfills
+several commits needs a different <code>name</code> per commit (results are write-once per run id).</p>
+<p>It normalizes every JUnit report into <code>Result</code> records, computes the run's <code>Verdict</code>, and keeps the
+bundle (<code>run.json</code>, <code>results.jsonl</code>, <code>verdict.json</code>, in a directory) as a workflow artifact named
+<code>qq-results-&lt;run id&gt;</code>. The run kind comes from the event: <code>merge_group</code> is <code>gate</code>,
+<code>pull_request</code> is <code>presubmit</code>, a push to the default branch is <code>postsubmit</code>. A job with no reports
+still stores a run, marked as having no results and failing, because a missing signal is not a
+pass, and so does a report with no test cases. Failing tests never fail the sink step; a report
+that is not JUnit XML does. Within one run a test with any unexpected result is UNEXPECTED: a
+repeated id is not a retry, so only V0-TST-03's explicit retries make a test FLAKY.</p>
+<p>What the sink publishes is permanent: the artifact is public on a public repo, and <code>collect</code>
+copies it into the write-once <code>results</code> branch, which keeps it after the job log is deleted. So
+each <code>Result</code> holds only structured fields (test id, status, expected, duration, file, report
+path, metrics) and the head of its failure or skip message: the first 20 lines and 200
+characters (plus a short truncation marker), with any <code>&lt;system-out&gt;</code>/<code>&lt;system-err&gt;</code> markup cut out. That is enough for the
+assertion and the first frames, which tell failures apart; the full text stays in the job log.
+<code>raw</code> is empty, and <code>&lt;system-out&gt;</code>/<code>&lt;system-err&gt;</code> are never stored (audit R3). To also keep each
+<code>&lt;testcase&gt;</code> element as it was, captured output included and capped at 16,000 characters, pass
+<code>keep-raw-junit: "true"</code> (<code>--keep-raw-junit</code>); only do that when everything the tests print may be
+public forever. Bundles written before this change keep their <code>raw</code> and still import.</p>
+<p>The same thing from a shell:</p>
+<pre>qqresults sink --backend local --repo quirq-ai/xo-space --commit HEAD --junit '.qq/out/junit/*.xml' --out .qq/results
+qqresults show .qq/results/qq-results-...</pre>
+<p>Records live in <code>src/qqresults/model.py</code> (schema <code>quirq-results/1</code>): <code>Change</code>, <code>Run</code>, <code>Result</code>
+(write-once, normalized; the raw <code>&lt;testcase&gt;</code> only with <code>keep-raw-junit</code>), <code>Verdict</code>, and
+<code>Failure</code> (plan §5.10). Test ids are <code>&lt;classname&gt;::&lt;name&gt;</code>, which keeps pytest, vitest,
+jest-junit and gotestsum ids stable across runs. Everything that knows GitHub is in
+<code>backends/github.py</code>.</p>
+<h3>The results store and scorecard v0 (V0-TST-02)</h3>
+<p>The store is a write-once tree of run bundles (<code>runs/&lt;bundle&gt;/</code>), kept on this repo's <code>results</code>
+branch. The <code>scorecard</code> workflow collects every <code>qq-results-*</code> artifact from xo-space's,
+innernet's and this repo's runs into it (website, onboarded since, is not collected yet), commits only new files, and writes <code>scorecard.md</code> and <code>scorecard.json</code> next to them
+(and to the run's summary). It also collects perf's runs (V0-PRF-01): their Run names the
+measured repo with kind <code>other</code>, so they are stored and queryable but never counted as that
+repo's presubmit, gate or post-submit runs. Importing a run that is already stored is a no-op;
+importing different bytes for the same run is an error.</p>
+<pre>git fetch origin +refs/heads/results:refs/remotes/origin/results &amp;&amp; git worktree add .qq/store refs/remotes/origin/results
+qqresults query runs --store .qq/store --repo quirq-ai/xo-space --kind postsubmit --failed
+qqresults query results --store .qq/store --run &lt;run id&gt; --unexpected
+qqresults query history --store .qq/store --test 'tests.test_greet::test_hello'
+qqresults scorecard --store .qq/store --days 7          # --json for machines
+qqresults collect --store .qq/store --repo quirq-ai/xo-space   # needs GITHUB_TOKEN
+qqresults collect --store .qq/store --repo quirq-ai/xo-space --report r.jsonl \
+  &amp;&amp; qqresults scorecard --store .qq/store --collect-report r.jsonl   # "Collect incomplete" on skips</pre>
+<p>Scorecard v0 measures, per repo: gate time-to-green p50/p90 (gate runs carry their queue-entry
+time once <code>quirq-ai/gate/timing</code> exports <code>QQ_QUEUED_AT</code>, a strict RFC 3339 time, before the sink, V0-GAT-04; one sample per green gate workflow run, from its first queue entry to the last
+finish of the latest attempt of each job, so a re-run counts its whole wait and red runs are
+not counted), main-red minutes per week (commits in main's push order, each push's <code>before</code> to
+its <code>after</code>; when the stored runs do not link them into one chain, by job finish time, and the
+row says so), flake rate, pass rates of gate,
+post-submit and presubmit runs, and runs that stored no results. A run with test results is red
+when its verdict failed; one without (a repo whose only check is a typecheck, or a job that
+broke before its tests) is red only when the job itself failed, and a cancelled job, such as one
+superseded by a newer push, is not counted. The sink records the job's status for this. Every other plan §8 metric is
+listed as not measured, with the work item (quirq-infra v0 or v1) that will measure it, or
+<code>TODO(suraj): no item yet</code>; nothing unmeasured shows as zero. A metric whose runs are stored but
+say nothing (cancelled, or no results and no job status) is not measured and says "runs stored,
+status unknown" rather than waiting on runs.</p>
+<h4>A partial collect says so</h4>
+<p><code>collect</code> skips an artifact it cannot read (an API error such as a rate-limited 403, a bad
+archive, a bundle that fails its checks) with a warning, so one bad artifact cannot block the
+others, and a repo whose artifacts cannot be listed does not stop the next repo. An artifact
+from a run collect does not trust (a fork's pull request, a workflow not allowed, a
+<code>--cross-repo</code> run off the default branch) is refused by policy at every collect; it is
+reported apart as "refused (not trusted)" and is not a skip, so <code>--strict</code> ignores it. The card
+must not present what is left as complete, so the scorecard workflow joins the two through one
+report:</p>
+<ul>
+<li><code>collect --report FILE</code> appends JSON lines to FILE: <code>{"repo", "finished": false}</code> for every
+repo before any is read, then, per repo, <code>{"repo", "finished": true, "listed", "new", "stored", "skipped": [reason, ...], "refused": [reason, ...]}</code>. Several collect calls share
+one FILE, and one repo's passes are merged: it is incomplete if any pass was. It lives in the
+runner's temp directory, never in the store, so no stale report carries over to a later card.</li>
+<li><code>scorecard --collect-report FILE</code> reads it, and the card (and <code>scorecard.json</code>'s <code>collect</code>)
+then says either "Collect complete" or "Collect incomplete", with each repo that skipped
+artifacts (how many, and the first five reasons), could not be listed, or did not finish.
+Trust refusals are listed apart under either and never make it incomplete.
+A missing or unreadable report, or one that names no repo, is incomplete too; when the
+collect step fails, the workflow appends a <code>(collect step)</code> line that did not finish.</li>
+</ul>
+<p>Error messages carry no URL query, so a signed storage URL never reaches the card. The runs
+collect missed are left out of that card only: a skip from an API error is retried by
+the next collect. Without <code>--collect-report</code> the card says nothing about collect, as before.</p>
+<h4>What collect trusts</h4>
+<p>Any workflow run in a collected repo can upload an artifact, so <code>collect</code> takes who produced one
+from GitHub, never from the artifact's contents, and then requires the contents to agree. Each
+artifact's workflow run (<code>GET /repos/{repo}/actions/runs/{id}</code>, fetched once per run) must:</p>
+<ul>
+<li>have run the repo's own code: its head repository is the repo, so a fork's pull request
+never writes;</li>
+<li>come from an allowed workflow file: <code>--workflow GLOB</code>, repeatable, by default
+<code>.github/workflows/qq-*.yml</code> (infra-config's generated builders) and
+<code>.github/workflows/presubmit.yml</code>. The <code>scorecard</code> workflow adds <code>failure-demo.yml</code> for this
+repo and <code>perf-publish.yml</code> for perf.</li>
+</ul>
+<p>A run is on the default branch only when its head branch is the default branch's name and its
+head commit is in that branch's history (<code>GET /repos/{repo}/compare/refs/heads/{default}...{sha}</code>
+is <code>identical</code> or <code>behind</code>, fetched once per commit), so a tag named like the default branch is not.
+Every bundle in it must then name that run and one of its attempts in its id
+(<code>github/&lt;repo&gt;/&lt;run id&gt;/&lt;attempt&gt;/&lt;job&gt;</code>) and claim the kind its event gives: <code>merge_group</code> is
+<code>gate</code>, <code>pull_request</code> is <code>presubmit</code>, a push to the default branch is <code>postsubmit</code>, a schedule
+or dispatch on the default branch is <code>postsubmit</code>, <code>canary</code> or <code>other</code>, and a push, schedule or
+dispatch off it only <code>other</code>. Its <code>commit</code> must be the run's head commit (a dispatched backfill
+and V0-TST-03's base run are the exceptions). For a pull request, whose run tests GitHub's merge
+commit that the API does not name, <code>commit</code> is not checked; instead the change's <code>head_sha</code> must
+be the run's head commit, and its <code>number</code> one of the run's <code>pull_requests</code> when GitHub lists any
+(it does for a same-repo PR). A gate run's <code>queued_at</code> must lie between 24 hours before GitHub
+created its workflow run and five minutes after the run's finish (the finish is the runner's
+clock), so one bad runner clock cannot dominate p90; without the run's creation time it is refused. A run may name another repo only as kind <code>other</code>, from a repo given
+with <code>--cross-repo</code> (the <code>scorecard</code> workflow passes <code>quirq-ai/perf</code>). Such a source can name any
+repo, so everything from it is held to more: <code>--workflow</code> must be given (its default globs never
+apply to it, and collecting it without one is an error), and only its push, schedule, dispatch
+and workflow_run runs on the default branch are read; every other artifact of it is refused. The
+artifacts API does not say which job uploaded an artifact, only which workflow run, so the job is not checked:
+a cross-repo source must upload from a workflow file of its own that holds only trusted jobs
+(no pull request triggers, no job running code under test). An uploader started by workflow_run
+vouches for the run that triggered it, which collect cannot see: it must filter on the default
+branch, check that run's event and head repository, and never republish that run's artifacts
+unchecked (perf-publish.yml reads perf's validated <code>perf-data</code> branch instead). Since such an
+uploader's bundles describe the run that triggered it, a bundle it writes about its own repo is
+held to the same rules as one naming another repo: kind <code>other</code> only, and its commit is not
+checked against the uploader's head (the compatibility check's verdict on this repo is one).
+A bundle's role is its own claim, so the compatibility roles (<code>compat</code>, <code>compat-qq</code>) are taken
+only from <code>compat-publish.yml</code>'s workflow_run runs of a <code>--cross-repo</code> source, whose bundles
+must each carry one; any other bundle claiming them is refused. Failure records are taken only from
+push, schedule or dispatch runs on the default branch; the record must be for the repo, its id
+must be the one its kind, repo and subject give (unless the subject is the public
+<code>sha256:&lt;16 hex&gt;</code> digest of a free-text one, which cannot be checked against the id; the id must
+then still be <code>&lt;kind&gt;-&lt;16 hex&gt;</code>), its
+<code>run_id</code> must name the run, and its opening time must lie between 24 hours before GitHub created
+that run and 5 minutes after the run's last update or now, whichever is later (without the run's
+creation time it is refused). A link bundle (from the <code>link</code> action) is held to the same: its
+<code>target.json</code> must name a record of the repo by a <code>&lt;kind&gt;-&lt;16 hex&gt;</code> id and name the run in its
+<code>run_id</code>. Its links are added only to a record already stored, and every bundle in an artifact
+is checked against its record before any is imported. A bundle whose record is not stored yet
+is tried again after the rest of the listing (its record may be in a newer artifact); if the
+record is still missing, it is retried at the next collect, and refused for good (and not read
+again) once it is 7 days old, since a record still missing after 28 scheduled collects was refused or has expired. A
+link bundle may carry no mark but <code>security</code>; one with any other mark is refused whole. Every
+link, in a record's artifact or a link bundle, must be dated between its record's opening and
+5 minutes from now (later links win, so a link dated far ahead would outrank every later one); a
+link bundle's links may also be dated up to 5 minutes before the opening, for the clock of the
+runner that wrote them.
+Records are type-checked (strings,
+finite non-negative numbers, booleans, RFC 3339 UTC times like <code>2026-10-04T10:00:00Z</code>);
+artifacts over 20 MB, zipped or not, and bundles over 50,000 results are refused. Artifacts are
+read oldest first, so a record reported again keeps the opening time and run of its first report.
+A refused artifact is a warning (<code>--strict</code> makes it fail the step). A stored
+record that does not read is left out of queries and the scorecard, with a warning and a count
+in the card, so it cannot break them.</p>
+<p>What this still trusts: a run's own code shapes its record. Anyone whose change runs in the merge
+queue (<code>merge_group</code>, including a fork's PR once it is approved into the queue) or as a same-repo
+pull request can make that run's bundle say what they like, within its kind, run and commit. A
+failure record's links are additive: a later default-branch run can add links (and so close the
+record) to a record an earlier run opened, and a record with a digested subject may carry any id,
+so a default-branch run of an allowed workflow can add to any record of its repo.</p>
+<p>The <code>results</code> branch is only ever added to, by the <code>scorecard</code> workflow. Gate's
+<code>qq-state-branches</code> ruleset (gate <code>settings/github.toml</code>, applied with the repo rulesets at gate
+<code>6610664</code>) blocks force-pushes and deletion of it, so nothing can rewrite the stored history.</p>
+<h3>Retry, then compare with base (V0-TST-03)</h3>
+<p>Give the sink a rerun command and let its verdict decide the check:</p>
+<pre>- run: python -m pytest --junitxml=results/junit.xml   # the adapter's own test command
+  continue-on-error: true
+- uses: quirq-ai/test-pipelines/sink@&lt;commit&gt;
+  if: always()
+  with:
+    junit: results/*.xml
+    rerun: python -m pytest --junitxml="$QQ_JUNIT_DIR/rerun.xml"
+    setup: python -m pip install -e .     # only if tests import installed code (see below)
+    infra-config: .qq/infra-config    # [verdict] from flakes.toml
+    fail-on-verdict: "true"</pre>
+<p>Failed tests are rerun with the change (<code>retry_failed</code> times, default 1, at most 3); with more
+than <code>max_failures_to_retry</code> failures (default 20) the change is treated as broken and nothing is
+retried. Those that still fail
+are rerun at the base commit, in a git worktree, <code>retry_failed + 1</code> times. A test that passes on
+a retry is FLAKY, one that fails an assertion (FAIL) on every retry and on every base run, with
+messages of the same kind, is EXONERATED, and every other failure is UNEXPECTED and fails the
+change: one that passes on any base run, one that crashes on any base run (a JUnit error, such
+as a fixture that reads a generated file the base worktree lacks; a crash on base is no signal,
+even when the change crashes too), one that crashes with the change but fails an assertion on
+base, one that fails differently there, one whose failure has no kind (below), and one with no
+base result, such as a new test. When every failure on both sides has a JUnit <code>type</code> (an
+exception class, as Surefire writes it), the types decide: different types fail differently,
+however little each says (a <code>TypeError</code> with the change is not an <code>Error</code> on base), and one
+type shared by every failure is the kind if it carries one. Only when a type is missing, or
+every failure has the same type and it says nothing (Rust libtest's <code>assert</code>), do the messages
+decide: the kind is the first word of the message's first line, after removing ANSI escape
+codes and a leading pytest <code>E</code> marker. Types and message words alike carry a kind only if they
+look like an exception class (audit M1: an allowlist, not a list of words to skip): an
+identifier or namespaced identifier (<code>a.b.C</code>, <code>a::C</code>) whose last part is CamelCase and ends in
+<code>Error</code>, <code>Exception</code>, <code>Failure</code>, <code>Fault</code> or <code>Panic</code> after at least one more letter, such as
+<code>FileNotFoundError:</code> (not <code>Error</code>, <code>Terror</code>, <code>parse_error</code> or node's <code>testCodeFailure</code>).
+<strong>A failure with no class-like kind never exonerates</strong>: an empty message (libtest writes none), a file path
+(<code>src/lib.rs:5:9:</code>), a test name, prose (<code>expected</code>, MSTest's <code>Test method X threw exception:</code>), a quoted word, <code>assert</code>, <code>thread</code> (<code>thread 'x' panicked at</code>), <code>Traceback</code>, jest's
+<code>thrown:</code> or <code>Timeout</code>. So a test body that reads a missing generated file on base (a FAIL in
+pytest) does not exonerate a change that makes it raise something else. Generic words carry no
+kind even when class-like: <code>Failed</code>, <code>Error</code>, and root classes such as <code>Exception</code> or
+<code>Throwable</code>, under any namespace. Neither do assertion classes, which runners raise for every
+failed check (<code>AssertionError</code>, <code>AssertionFailedError</code>, <code>ComparisonFailure</code>,
+<code>ExpectationFailedException</code>, <code>MultipleFailuresError</code>, and any whose last part contains
+<code>Assert</code>), as a type or as a message word: a bare <code>assert</code> that fails on base for one reason
+never exonerates one that fails with the change for another. A type carries no kind when it is
+one of those, is not class-like, is a runner
+category written for every failure whatever went wrong (audit N1: libtest's <code>assert</code> for an
+<code>assert_eq!</code> and for an unrelated <code>unwrap()</code> panic alike, and <code>timeout</code>; cargo-nextest's <code>test failure</code>, <code>test timeout</code> and <code>test abort</code>; <code>panicked</code>, <code>traceback</code>, <code>thrown:</code>, <code>abort</code>,
+<code>signal</code>), or contains whitespace (including joined types such as <code>A / B</code>). A <code>&lt;failure&gt;</code> that
+reports a timeout, an abort or a signal is a CRASH, like an <code>&lt;error&gt;</code>, so it never exonerates:
+one whose <code>type</code> is not an exception class and has the word <code>timeout</code>, <code>abort</code>, <code>aborted</code>,
+<code>signal</code> or a signal name, split at camelCase humps too (libtest's <code>timeout</code>, nextest's <code>test timeout</code>, node's <code>testTimeoutFailure</code>), or one with no type, or a type that is not an exception
+class, whose message's first line begins with such a report (<code>Timeout of 2000ms exceeded</code>,
+pytest-timeout's <code>Failed: Timeout &gt;1.0s</code>, jest's <code>thrown: "Exceeded timeout</code>, <code>timed out</code>,
+<code>Aborted</code>, <code>killed by signal 9</code>, <code>signal: 11, SIGSEGV</code>, <code>SIGSEGV</code>). A failure whose type is an
+exception class stays a FAIL whatever its message says (<code>timeout: expected 3 to equal 5</code> with
+<code>AssertionError</code>), as do <code>assert timeout == 5</code>, <code>timeout is None</code> and <code>signal 5 != 3</code>; a
+timeout named later in the line or as an exception class (<code>TimeoutError</code>) stays a FAIL too, and
+its kind is compared as usual. This is a heuristic and
+cannot tell two failures of one kind apart. The retry and
+base runs are stored too, linked to the run by <code>parent</code> and listed in the verdict's <code>inputs</code>.
+The base side runs in the same job, so the rerun command must test the code in its working
+directory. If the tests import installed code (an editable install, a build outside the tree),
+pass <code>setup</code>: it runs in the base worktree before the base tests and in the change's checkout
+afterwards, or the base side would test the change's code and wrongly exonerate it. If the base
+cannot be checked out or <code>setup</code> fails there, the retries are still stored and nothing is
+exonerated; if <code>setup</code> fails to restore the change, the step fails. The base is the tested
+commit without this change: for a pull request or a merge-queue entry, the tested merge commit's
+first parent; for a push, the commit before it. When the target branch's commit (base_sha)
+differs, the test must also fail there: a failure is exonerated only if it fails at every base.
+That stops a fix queued ahead from exonerating a regression in a merge-commit queue, and a
+rebase queue's PR whose earlier commit broke the test while main passes. It does not cover a
+rebase queue where an entry ahead fixes the test and the PR's own earlier commit breaks it
+again: both bases fail, and the real base (the entries ahead without any of the PR's commits)
+is not derivable from the event. So a run whose base is its tested commit's first parent (a
+pull request or merge-queue entry, whatever its <code>kind</code>) is compared with base only when that
+commit is a merge (a pull request's merge ref, or a merge-commit queue) or has one parent that
+is base_sha (a squash, or a one-commit rebase, with nothing queued ahead). Any other queue
+entry, one parent that is not base_sha, which includes a squash queue with entries ahead, is
+not compared, and its still-failing tests stay UNEXPECTED ("rebase-method queue: base not
+derivable"). An explicit <code>base</code> is one more base the failure must also fail at: it never
+replaces the run's own bases or skips this check. It must be a full 40-hex commit id, since a
+tag can shadow a branch of the same name: with a branch or tag name, the run's bundle and
+retries are still written, but nothing is compared ("not a full 40-hex commit id; not
+compared"), so its still-failing tests stay UNEXPECTED and <code>fail-on-verdict</code> fails. Without
+<code>rerun</code>, <code>base</code> is not used. TODO(expert): derive the base from the PR's
+commits, or read the queue's merge method from the branch rules (ORG-03 settled on squash merge
+queues for every repo, so a squash entry with entries ahead is not compared today). The rerun command comes from the builder, so the core never names a runner;
+<code>$QQ_RETRY_TESTS</code> lists the failed test ids for a command that can select them. CI proves the
+done-when with <code>tools/planted_demo.sh</code>: the planted failure is exonerated, and changes that break
+a test or the code under it still block, including a Rust crate (real <code>cargo test</code> JUnit, through
+<code>RUSTC_BOOTSTRAP=1 ... -Z unstable-options --format junit</code>) whose test panics on base and fails
+an <code>assert_eq!</code> with the change. No generated builder passes <code>rerun</code> yet (infra-config <code>generated/</code>), so the retry and base
+comparison run in this repo's CI, not yet in any product's gate.</p>
+<h3>Failure records (V0-TST-04)</h3>
+<p>Every held canary, canary rollback and auto-revert opens one write-once <code>Failure</code> record (plan
+§5.10), mirrored to one GitHub issue labelled <code>qq-failure</code> and <code>qq-failure:&lt;kind&gt;</code>:</p>
+<pre>- run: ./probe --report &gt; "$RUNNER_TEMP/qq-summary.txt"   # written on the runner, never echoed
+- uses: quirq-ai/test-pipelines/failure@&lt;commit&gt;     # needs issues: write
+  with:
+    kind: canary-held                                 # canary-held | canary-rollback | auto-revert | red-run | fuzz
+    subject: ${{ steps.build.outputs.digest }}        # same kind, repo and subject: same record
+    summary-file: ${{ runner.temp }}/qq-summary.txt   # one line on what happened; not logged
+    stage: probe
+    signal: health</pre>
+<p>GitHub prints every input of an action (and its steps' environment) in the run log, and a public
+repo's run logs are public. So the <code>summary</code> input is published in the run log whatever the
+classifier decides, and it exists only for text you would publish anyway. Pass the summary as
+<code>summary-file: &lt;path&gt;</code>, a file on the runner (the file's contents are not logged), and never put
+security detail in any other input on a public repo. Write that file without echoing the text through the log: a step that
+runs <code>echo "${{ ... }}" &gt; summary.txt</code> has the expression expanded into its script, and the script
+is printed in the log, so the text is public anyway. TODO(suraj): where private details live.</p>
+<p>The record id is derived from kind, repo and subject, and the issue carries the id in a hidden
+marker, so reporting the same event twice (a retried pipeline, a second runner) still gives one
+record and one issue. GitHub's issue list can lag behind a create, so two racing runners may
+each open one; every report closes each open issue with the marker but the lowest-numbered as a
+duplicate. What is learned later is added as link records, never by rewriting, with the
+<code>link</code> action:</p>
+<pre>- uses: quirq-ai/test-pipelines/link@&lt;commit&gt;        # needs issues: write
+  with:
+    id: ${{ steps.failure.outputs.id }}               # the failure action's id output
+    culprit: quirq-ai/xo-space@&lt;commit&gt;
+    fix: https://github.com/quirq-ai/xo-space/pull/12
+    covering-test: &lt;commit or URL&gt;
+    dir: .qq/store/failures   # only when the record is not the failure action's in this job</pre>
+<p>It adds the links to the record in <code>dir</code> (by default the directory the failure action keeps in
+this job; otherwise a checkout of the <code>results</code> branch's <code>failures/</code>), updates the issue (closing
+it when complete), and uploads the links this call added as a <code>qq-failure-*</code> link bundle:
+<code>target.json</code> (the record id, its repo and this run) and <code>links/</code>, filtered as the failure
+artifact is. <code>collect</code> adds them to the stored record, so the store closes when the issue does.
+On a security record the bundle carries no values: each link goes up as <code>withheld</code>, next to the
+security mark, so the record can still close. Linking the same value again (the issue, on every
+report) adds nothing to the store. From a shell, <code>--link-copy DIR --run-id RUN</code> writes the bundle:</p>
+<pre>qqresults failure link &lt;id&gt; --dir &lt;store&gt;/failures --culprit &lt;owner/repo@sha&gt; --fix &lt;PR URL&gt; \
+  --covering-test &lt;commit or URL&gt; --mirror quirq-ai/xo-space   # updates the issue; closes it when complete</pre>
+<p>The store is the public results branch. Only <code>collect</code> and <code>failure link</code> write there, and both
+write only what may be public (below): <code>collect</code> imports each artifact's public bundle, whatever
+the artifact holds, and <code>failure link</code> stores any other value as <code>withheld</code> (it still marks the
+record security if the value reads that way). Never run <code>failure open --dir</code> on a store path; it
+writes the full record. Keep the detail where it belongs (the PR, the postmortem) and link to it.</p>
+<p>A record closes only when culprit, fix and covering test are linked (infra-config
+<code>postmortem.toml</code> <code>record_needs</code>), and the scorecard reports the share that are (TODO(suraj):
+plan §8 also lists the operation). The scorecard counts held canaries, canary rollbacks,
+auto-reverts and fuzz findings opened in the window; red-run records and the one planted record
+that <code>failure-demo</code> reports (fixed by its id in <code>scorecard.DEMO_RECORDS</code>, so no pipeline can
+take its own records out) are left out, each noted in the card. A fuzz
+finding, like any security record, is stored only as its id and marks, so it is counted by id
+and closes on its <code>withheld</code> links. A link stored as <code>withheld</code> counts as linked, so a record can
+close on values nobody can read publicly.
+TODO(expert): whether withheld links should count towards closing (audit S4).</p>
+<p>Free text is never public without the opt-in. The issue title and body, the failure artifact and
+the store carry only:</p>
+<ul>
+<li>kind, id, opening time and schema, which must have exactly the shape this version writes (an
+artifact whose record does not, or whose fields are not strings, is refused), and repo when it
+is a plain <code>owner/name</code> (org-chosen, so shown even when it reads like a security word);</li>
+<li>stage, signal and channel only when each is one of a small fixed list of known values
+(<code>failures.PUBLIC_LABELS</code>): stage <code>select</code>, <code>build</code>, <code>verify</code>, <code>fuzz-smoke</code>, <code>deploy</code>, <code>probe</code>,
+<code>soak</code>, <code>declare</code> (the canary pipeline's stages, plan §5.8), <code>presubmit</code>, <code>gate</code> or
+<code>postsubmit</code>; signal <code>health</code>, <code>canary-probe</code>, <code>canary-deploy</code>, <code>main-red-minutes</code>,
+<code>error-rate</code> or <code>session-drop</code> (infra-config <code>health.toml</code>); channel <code>canary</code>, <code>dev</code> or
+<code>stable</code>. Any other label shows as <code>withheld</code>, however harmless it looks. TODO(suraj): read
+the list from infra-config instead of keeping a copy;</li>
+<li>the subject, build digest, last good, first bad, run and every link (culprit, fix, covering
+test, operation, failure class, postmortem, issue) only when it is a commit (7 to 40 hex), a
+digest (<code>sha1:</code>, <code>sha256:</code> or <code>sha512:</code> with its full hex length), <code>owner/repo@&lt;commit&gt;</code> or
+<code>owner/repo#&lt;number&gt;</code>, a <code>https://github.com/owner/repo/</code> pull, issue, commit or Actions run
+URL, or the action's run id; references and URLs only when the owner is the record's own and
+the job name, and a repo name other than the record's own, do not read as security.</li>
+</ul>
+<p>Those name slots are checked against a list of security words, not an allowlist, so a repo or
+job name the list misses still shows. That is the accepted residual: it is a name chosen by the
+org, not a description. Labels are not: a label outside the list above is withheld, because
+labels such as <code>wild-pointer</code> or <code>timing-attack</code> slipped past the word list (audit R1).</p>
+<p>Anything else, including any other URL, shows as <code>withheld</code> (a subject is replaced by its digest
+instead). That fails closed on purpose: natural values such as a covering test id
+(<code>tests/test_x.py::test_y</code>), an operation key or a failure class always show as <code>withheld</code>. The
+summary stays in the local record unless you pass <code>public-summary: "true"</code> to the action (or
+<code>--public-summary</code> to <code>qqresults failure open</code>/<code>link</code>). Since the record is write-once, a repeat
+report publishes the summary only if it carries the same summary as the report that wrote it;
+<code>failure link --public-summary</code> publishes whatever the record holds. The artifact is a public
+copy written by <code>--public-copy</code>, never the record itself.</p>
+<p><code>--public-summary</code> (and <code>public-summary: "true"</code>) trusts the security classifier below, which is a
+word list and can miss: a summary that describes a vulnerability in words the list does not know
+is published. So keep it off for any failure that touches input handling (parsing, decoding,
+authentication, crypto, file or network input), and turn it on only for summaries you would
+publish yourself, such as a probe's status line.</p>
+<p>The security classifier errs towards withholding: records flagged <code>security</code>, of kind <code>fuzz</code>, or
+whose free text (summary, subject, labels, link values) matches security terms such as
+"buffer overflow", "credential", "use-after-free", "remote code execution" or "without login" are
+kept but never mirrored to a public issue, even with the opt-in. Words common in ordinary failures
+(crash, panic, heap, leak, certificate, escalated, "not verified", overflow, injection, token,
+auth, JWT, sandbox, privileged, access control, CORS) count only in a security phrase ("heap
+buffer overflow", "SQL injection", "credential leak", "auth bypass", "missing authorization
+check", "sandbox escape", "container breakout", "CORS any origin", "certificate verification
+disabled", "JWT signature not verified"). Memory-safety findings (use-after-free, double free,
+heap or stack buffer overflow, out-of-bounds read or write, invalid free, wild pointer, sanitizer
+and KASAN reports) always count, as do a timing attack or side channel, a padding oracle, a TLS
+downgrade, a skipped login, a hardcoded key and a zip bomb; a bare segfault, SIGSEGV, SIGABRT,
+SIGBUS, SIGFPE, general protection fault, kernel oops, overflow, null dereference or out-of-bounds
+index counts only when the record's free text anywhere (subject, summary, labels, links) also
+names untrusted input (malformed, crafted, attacker, untrusted, remote or user input, a large
+request, fuzzing) or an attack surface (TLS, a certificate, a decoder or parser, a codec, an image
+or compression library, a packet, http2 or grpc, a font, a protocol, malloc, an allocation or
+buffer size), so "SIGSEGV in tls handshake" is withheld and "segfault in worker" gets an issue.
+"Remote exec" alone is not a security term (build systems run remote execution). Names the
+org chose (the repo, the run id and job, the issue URL, and the record's own <code>owner/name</code> wherever
+it appears, as in a run-id subject or a pull request link) are not classified, nor are digests
+and hex runs. Text is matched after NFKC normalisation, removing zero-width and other format
+characters, splitting camelCase and turning <code>_</code>, <code>-</code>, <code>.</code>, <code>/</code>, <code>:</code>, <code>#</code> and <code>@</code> into spaces,
+so <code>test_jwt_not_checked</code> and <code>open-redirect</code> count. A security record's artifact holds only its id,
+kind, subject digest (<code>sha256:&lt;16 hex&gt;</code>, even for a commit), run and a <code>security</code> mark, so the store learns the mark and
+<code>failure link --mirror</code> on the store record never republishes it. The digest hides a prose
+subject, not a commit: anyone can hash the repo's public commits and find which one it is. Reporting an existing record
+again with <code>security: "true"</code> or security-looking text marks it security too. If a record only
+looks that way after its issue was opened, the issue's text is hidden and it is closed, and the
+step fails asking a repo admin to delete it: editing an issue does not remove the old text from
+its history or from emails already sent. A withdrawn issue counts as a security mark itself: a
+later report (a re-run on a fresh runner) never patches or reopens it, and its record turns
+security. The record's earlier public copy may already be in an artifact by then; this job's
+artifact is replaced by the marks-only one. TODO(suraj): where security records go instead.</p>
+<p>Limits: a withdrawn issue is the only mark the action can see, so it holds only until a repo
+admin deletes that issue; after that a fresh report that does not look security-related opens a
+public issue again. Likewise, when the first report is security-related, no issue is opened, so
+nothing on GitHub remembers it, and a later such report from a fresh runner (without
+<code>security: "true"</code>) opens a public issue. The store learns the mark only once <code>collect</code> has run,
+and the action does not read the store. TODO(expert): a durable mark the action can check before
+opening an issue. The <code>failure-demo</code> workflow proves the done-when against the real API
+with a planted held canary, then links and closes it with the <code>link</code> action.</p>
+<h3>The compatibility check</h3>
+<p>Every public repo of the org should work with qq without being onboarded (no gate, rulesets,
+merge queue, lkgr, canary or rollers), and a standing check keeps measuring how far qq gets. A
+repo is <strong>compatible</strong> when, on its default branch:</p>
+<ol>
+<li>it has <code>infra/repo.toml</code>, and <code>qqsync validate --kind &lt;every kind in infra-config main's config/kinds.toml&gt;</code> passes;</li>
+<li><code>qq sync</code> succeeds;</li>
+<li>each target kind's interim commands, the ones qq's generated CI runs, pass on the org's
+toolchain pins.</li>
+</ol>
+<p>Apart from that, the check runs qq's own path, <code>qq build</code> then <code>qq test</code> through recipes. It
+never decides compatibility: a repo whose kind has no recipes adapter yet fails there, and that
+is a gap in qq, not in the repo, so the card shows it in a column of its own. It runs after the
+kind commands, on a reset checkout that keeps only what <code>qq sync</code> made, whether or not they
+passed, and each half has a five-minute limit, so a qq that hangs reads as "timed out" in qq's
+column, never as the repo failing.</p>
+<ul>
+<li><code>.github/workflows/compat.yml</code> runs daily at 05:47 UTC and on demand. Its <code>plan</code> job lists
+the org's public repos, leaves out archived ones and those in <code>.github/compat-skip.toml</code> (one
+line each with the reason; CODEOWNERS covers it), and resolves the qq and infra-config main
+commits every job uses. Then one job per repo, named <code>compat (&lt;repo&gt;)</code>, checks the repo out at
+the head the plan resolved, installs qq the way a contributor does (<code>bin/qq</code> from that qq
+commit, with the qqsync and qqrecipes it pins), and runs the steps above. Kind names and
+commands come from infra-config through <code>qqcfg get kinds</code>; the workflow names none
+(<code>qqresults compat commands</code> runs them). qq runs the qq a repo's manifest pins (<code>[qq]</code> in
+<code>infra/repo.toml</code>) when that is not the launcher's own version, as it does for a contributor;
+the bundles name the launcher's commit as <code>executor</code>. Before qq's path the checkout is reset,
+keeping only what <code>qq sync</code> made (<code>.qq/toolchains</code>, <code>.qq/deps</code>, <code>.qq/sync.json</code>); qq's path
+runs only when that reset succeeded.</li>
+<li>Those jobs run other repos' code, so they hold only <code>contents: read</code>, no secret, no persisted
+credentials and no cache, and at most four run at once (the org's concurrent jobs are shared).
+Nothing they upload is trusted. <code>.github/workflows/compat-publish.yml</code> runs no repo code: after
+a compat run on main it reads each job's conclusion and its steps' conclusions through the
+Actions API, and the plan from the plan job's artifact only if that is the one artifact of its
+name and was created before the plan job finished (any job can upload into the run, and
+upload-artifact can replace an artifact). It writes one bundle per repo (kind <code>other</code>, role
+<code>compat</code>; commit, infra-config commit as <code>config_revision</code>, qq commit as <code>executor</code>) and one for
+qq's path where it ran (role <code>compat-qq</code>), into one <code>qq-compat-*</code> artifact. A missing job, a
+job that never finished, or a setup step that failed is a <code>CRASH</code> result that says so, never a
+pass.</li>
+<li><code>scorecard.yml</code> collects those in a pass of its own (<code>--cross-repo quirq-ai/test-pipelines --workflow .github/workflows/compat-publish.yml --artifact-prefix qq-compat-</code>), so the other
+passes never list them and this pass lists nothing else. They never count toward a repo's
+metrics: the card shows the latest check's verdicts in a Compatibility table, with when it
+finished, the steps that failed and qq's path, and names the repos left out and why. A repo
+with an older verdict that the latest check did not check is listed apart and not counted.</li>
+<li>monitoring leaves exactly the runs named <code>compat (&lt;repo&gt;)</code> out of this repo's "CI on main"
+rollup (its <code>config/checks.ts</code>); <code>tests/test_workflows.py</code> keeps every other job from being
+named like that.</li>
+<li>It never blocks a merge, is never a required check and opens no issues.</li>
+</ul>
+<pre>qqresults compat commands --kinds kinds.json --manifest manifest.json   # what a repo's job runs
+qqresults scorecard --store .qq/store --compat-skip .github/compat-skip.toml</pre>
+<h3>v0 status</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What</th>
+<th>PR</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0-TST-01</td>
+<td>Result schema and JUnit sink</td>
+<td>#2</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-TST-02</td>
+<td>Results store v0 and scorecard v0</td>
+<td>#3</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-TST-03</td>
+<td>Verdict: retry, then compare with base</td>
+<td>#4</td>
+<td>merged</td>
+</tr>
+<tr>
+<td>V0-TST-04</td>
+<td>Failure records with issue mirror</td>
+<td>#6</td>
+<td>merged</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Working here</h3>
+<p>See <a href="https://github.com/quirq-ai/test-pipelines/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>. Run the checks with <code>python -m pytest</code>.</p>

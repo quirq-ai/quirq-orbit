@@ -1,0 +1,243 @@
+<h2>qq-setup</h2>
+<p>One command to install, update or remove qq and xo on your machine, and to set up quirq infra (qq)
+for your GitHub org: the terminal checks your tools and opens one page in your browser, qq on this
+machine first, then your org's repos.</p>
+<pre>npx --allow-remote=root https://codeload.github.com/quirq-ai/setup/tar.gz/&lt;commit&gt;</pre>
+<p><code>&lt;commit&gt;</code> is the full id of the latest commit on
+<a href="https://github.com/quirq-ai/setup/commits/main" target="_blank" rel="noopener"><code>main</code></a>. Always pin it: the link then serves
+exactly that commit, and nothing that lands on <code>main</code> later. npx downloads it as a tarball, not
+through git: npm 10's npx cannot run a <code>github:</code> link pinned to a commit ("GitFetcher requires an
+Arborist constructor"). <code>--allow-remote=root</code> lets npm run a package from a tarball link. npm 12
+refuses one without it. npm 11.14 and later honour the flag, though by default they already allow
+tarball links. npm 10 and npm 11.0 to 11.13 ignore it. Either way it is harmless here, because the package has no
+dependencies.</p>
+<p><strong>For your org the form changes nothing on GitHub.</strong> It shows the plan and stops: it creates no
+repo, opens no pull request and changes no setting. The version that carries the plan out comes
+next, after review. The one exception is step 3, for members of quirq-ai: it opens pull requests
+in quirq-ai repos, one each time you press Open on a plan you have read (below).</p>
+<p>On your own machine, its first step installs, updates or removes qq and xo:
+it shows the exact commands for what you pick and runs them when you press Run. The same is in the
+terminal as <code>install</code>.</p>
+<h3>What it does</h3>
+<ol>
+<li>
+<p><strong>Checks</strong> Node 22+ (CI tests 22 and 24; qq's own toolchain is Node 24), <code>git</code>, <code>gh</code> (logged in with the <code>repo</code> and <code>read:org</code> scopes, which
+<code>gh auth login</code> grants) and Python 3.11.4+ (<code>QQ_PYTHON</code> if set, else <code>python3</code>: qq runs that one, and the setup step will
+run infra-config's generator and gate). It notes that the setup step will also need the <code>workflow</code> scope, and how to remove it
+afterwards. It never asks for <code>admin:org</code>, <code>delete_repo</code> or <code>gist</code>. It refuses to run while
+<code>GH_TOKEN</code>, <code>GITHUB_TOKEN</code>, <code>GH_ENTERPRISE_TOKEN</code> or <code>GITHUB_ENTERPRISE_TOKEN</code> is set, so it
+only ever acts as your own <code>gh</code> login. Without <code>git</code>, <code>gh</code> or a <code>gh</code> login the form still opens,
+for this machine only.</p>
+</li>
+<li>
+<p><strong>Opens a form</strong> on <code>127.0.0.1</code> (link printed in the terminal; <code>--no-browser</code> only prints it).
+It is one page in two steps, with a bar at the top that takes you to either. When qq is not on
+this machine, the page opens at step 1 and asks you to install qq first. Short lines such as
+"What is qq?" open in place when tapped: a few lines on what qq, xo and step 2 do, most with a
+link to the guide that says more.</p>
+<ul>
+<li><strong>1. Install, update or remove qq and xo on this machine.</strong> It shows what is
+installed, as <code>install</code> does, and a choice per tool. Each
+starts at Keep (or Don't install), so nothing is installed or removed until you pick it. It
+shows the exact commands for what you picked, and Run runs them here, as you, with their
+output on the page and in the terminal. Removing qq offers its demo folders and its
+<code>QQ_PYTHON</code> line as unticked boxes. "Done: close qq-setup" stops the command. On Windows
+(run from cmd or PowerShell) this step offers xo only, with cmd.exe steps: a venv in
+<code>%USERPROFILE%\.xo</code>, then <code>%USERPROFILE%\.xo\Scripts</code> added to your user PATH (open a new
+terminal after). qq runs on Linux and macOS, so for qq the step points to WSL (with Node 22 or
+newer installed inside it; not tested there), and step 2 still works. Started in WSL with no
+Linux Node, WSL runs Windows' Node: from a Linux folder this step says that instead, and from a
+folder under /mnt/c the Windows text ends with the same check (<code>which npx</code> must not print a /mnt/ path).</li>
+<li><strong>2. Set up repos in an org you own</strong> (the terminal then does 3 and 4 below). You pick an org you own, the repos to put under qq and, optionally, a new starter repo.
+Without a <code>gh</code> login, or with no org you own, this step says what to fix instead.
+A repo is offered only when it can run its qq kind's commands as they are: Python service
+(<code>requirements.txt</code>), pytest (<code>requirements-dev.txt</code> listing pytest, and tests at the root), Next.js app (pnpm with
+<code>build</code> and <code>typecheck</code> scripts) or Gatsby site (pnpm with <code>build</code> and <code>test</code> scripts). Others
+are listed with the reason, including private repos: GitHub offers a merge queue on private repos
+only on Enterprise Cloud, so v0 sets up public repos only.</li>
+<li><strong>The form's third step, repos and policies in quirq-ai</strong> (shown when your gh login is a member of
+quirq-ai; the terminal steps below are unrelated). It lists every repo gate's <code>settings/github.toml</code>,
+infra-config's <code>config/repos.toml</code> or its <code>config/org.toml</code> <code>[[infra_repo]]</code> names, each with its
+testing pipelines (<code>config/pipelines.toml</code>), its merge rules (approvals, code-owner review,
+auto-merge, required checks), its release channels, its CODEOWNERS, and whether GitHub has an active
+<code>qq-main</code> ruleset on it ("ruleset on GitHub", "no ruleset on GitHub", or "could not check", never read
+as missing). It does not compare that ruleset's rules with gate's settings: a merged gate change
+reaches GitHub only when an org admin runs gate's settings apply. A repo registered in infra-config
+that gate does not list yet is shown apart, and a repo or CODEOWNERS it cannot read says so rather
+than "none". The TOML is read by <code>cli/toml.mjs</code>, which
+reads only the subset those files use and refuses anything else rather than reading it half.</li>
+</ul>
+<p>Below the list, <strong>add a product repo, change a repo's merge rules, or take a product out of qq</strong>
+(<code>cli/policy-write.mjs</code>). Planning clones gate, infra-config and the repo anonymously into a
+scratch folder and runs their own tools there, in a child process with an empty home folder and no
+token: infra-config's <code>qqcfg add-repo</code> or <code>remove-repo</code> (the one generator), <code>qqcfg deliver</code> for the
+repo's workflows, and gate's <code>settings plan</code> for its golden file, in gate's hashed apply
+environment (built once per run, so the first plan takes a minute or two and needs Python 3.11 or
+newer). gate's <code>settings/github.toml</code> and <code>pins.toml</code> are edited line by line and parsed again to
+check that nothing else changed. The page shows every pull request as a diff, in order:</p>
+<ul>
+<li><strong>add</strong>: infra-config (the <code>[[repo]]</code>, its presubmit and postsubmit builders, the generated
+files), then, once that is merged, the repo's <code>qq-*.yml</code> workflows and gate's <code>[[repo]]</code> with its
+infra-config pin moved to infra-config main and the golden plan regenerated;</li>
+<li><strong>change</strong>: gate's <code>[[repo]]</code> values and the golden plan;</li>
+<li><strong>remove</strong>: infra-config, then gate. It says what stays: the repo, its <code>qq-*.yml</code> workflows and
+its rulesets (<code>qq-main</code> included, which keeps gating its pull requests), with the <code>gh api</code>
+lines an admin runs to delete the rulesets. qq-setup deletes nothing.</li>
+</ul>
+<p>Open makes one branch (<code>qq-setup/&lt;op&gt;-&lt;repo&gt;-&lt;commit&gt;</code>) and one pull request through your gh
+login, after checking that the base branch has not moved since the plan; it writes only
+<code>git/trees</code>, <code>git/commits</code>, <code>git/refs</code> for a <code>qq-setup/</code> branch and <code>pulls</code> in quirq-ai
+(<code>ghWrite</code> in <code>cli/gh.mjs</code> refuses anything else). Nothing is merged or applied: you merge each
+pull request, and once gate's is merged, planning again shows the command an org admin runs to
+apply gate's settings. A step that needs the one before it merged waits, and planning again picks
+up where an earlier run stopped. Limits: product repos only (qq's own infra repos are edited, not
+added or removed), a public repo with a first commit, macOS or Linux, and a new repo's
+<code>infra/repo.toml</code> is printed as a <code>qqsync init</code> command, not written. A repo gate also names as a
+release executor or in an org workflow is refused for removal: that is a gate change made by hand.</p>
+</li>
+<li>
+<p><strong>Reads what already guards each picked repo</strong> (merge settings, rulesets and branch
+protection, all with GETs) and prints a warning for anything that would get in qq's way, or
+"no existing protection found".</p>
+</li>
+<li>
+<p><strong>Prints the plan</strong> in the terminal: the config repo it would create, each pull request, each
+ruleset, what qq does not do for other orgs yet (watching <code>main</code>, lkgr, the canary, dependency
+rolls, private repos, <code>qq land</code>), that on GitHub Free the gate is honour-based, and how to undo
+setup.</p>
+</li>
+</ol>
+<p><strong>Over SSH:</strong> run it with <code>--no-browser --port N</code> and forward the same port number,
+<code>ssh -L N:127.0.0.1:N &lt;host&gt;</code>; then open the printed link on your own machine. The form answers only
+requests addressed to <code>127.0.0.1:N</code>, so a forward to a different local port is refused.</p>
+<p>Exit codes, as gate and installer use them: 0 done, 1 not ready or stopped (a failed check, or no
+request from the form for 30 minutes), 2 error. Ctrl-C stops it by signal, which shells report as
+130.</p>
+<h3>Install, update or remove qq and xo</h3>
+<pre>npx --allow-remote=root https://codeload.github.com/quirq-ai/setup/tar.gz/&lt;commit&gt; install</pre>
+<p>It looks at what is already on this machine and says so: qq's commit in <code>~/qq-tools/depot</code> and setup's
+pin for it, qqsync's commit, xo's commit in <code>~/.xo</code>, and whether each is on your <code>PATH</code>. Then it asks,
+for each tool: install it if it is missing (or reinstall it if it is there but broken); update, remove or
+keep it if it is there. It prints the exact commands, runs them after you say yes, and stops at the first
+one that fails (each is safe to run again). It never writes to GitHub and needs no <code>gh</code> login. It changes
+files only in your home directory, except that on a Mac with no new enough Python its first step is
+<code>brew install python@3.13</code>, which writes to Homebrew's folder. While you are removing a tool, Enter
+at "Install xo?" installs nothing.</p>
+<p>On Windows the same command, typed in cmd or PowerShell, handles xo only (qq runs on Linux and
+macOS; <code>--only qq</code> stops with how to get it through WSL). It runs cmd.exe commands: xo's venv is
+<code>%USERPROFILE%\.xo</code> (programs in its <code>Scripts</code> folder), and its PATH entry goes into your user PATH
+in the registry, read and written as it is stored, so other entries keep their <code>%VAR%</code> form
+(<code>setx</code> is not used: it cuts PATH at 1024 characters). Open a new terminal afterwards. Removing
+deletes the venv and that entry. CI runs the install and remove for real on a Windows runner.</p>
+<ul>
+<li><strong>qq</strong> (with qqsync) installs with the <a href="https://docs.quirq.dev/docs/install" target="_blank" rel="noopener">qq guide</a>'s three commands,
+plus one step after the clone that the guide does not have: it moves the checkout back from qq's newest
+commit to setup's pin (<code>git reset --keep</code>). Updating reruns them, which deletes and re-clones <code>~/qq-tools/depot</code>, so qq is kept when the checkout
+has local work, unless you choose otherwise; <code>--yes</code> always keeps it. Local work is what git can
+show: files <code>git status</code> lists (changed, staged or untracked, but not ones git is told to ignore), commits
+no remote branch has (on any branch or tag, on a detached HEAD, or only in a reflog, as after a
+reset), stashes, and other worktrees. When git cannot check, qq is kept too. When only the <code>PATH</code>
+line is missing, it adds just that line. Removing deletes <code>~/qq-tools</code>, <code>~/.cache/qq</code> and the
+<code>PATH</code> line, as the guide's "Remove everything" does. That command also deletes the guide's demo
+folders, <code>~/qq-try</code> and <code>~/qq-ci-venv</code>, where your own clones may be: this asks about each by name,
+and <code>--yes</code> keeps them. It asks too before deleting an <code>export QQ_PYTHON=python3.N</code> line (something
+else may use that Python; <code>--yes</code> keeps it), and it leaves one written another way, or a <code>PATH</code>
+line written another way, and says so.</li>
+<li><strong>Pins.</strong> The commits setup installs (xo, qq and qqsync) live in one file,
+<a href="https://github.com/quirq-ai/setup/blob/main/pins.json" target="_blank" rel="noopener"><code>pins.json</code></a> (<code>qq-setup-pins/1</code>), and move only in a reviewed setup PR. qqsync's commit is
+also in the qq guide's command in <code>cli/tools.mjs</code>; a test keeps the two equal.</li>
+<li><strong>xo</strong> installs at the commit the <a href="https://github.com/quirq-ai/xo/blob/main/docs/quickstart.md" target="_blank" rel="noopener">xo quickstart</a>
+pins, and updates with its <code>pip install --force-reinstall --no-deps</code> at that commit. An xo at another
+commit is reported, not called out of date, since the XO team may have given you a newer one; updating
+it would move it back to the pin. When only its <code>PATH</code> line is missing, it adds just that line. Only
+a venv (with <code>pyvenv.cfg</code>) at <code>~/.xo</code> counts as xo's; any other <code>~/.xo</code> is left alone, and xo is not
+installed over it. Removing runs <code>xo logout</code> (which deletes the saved XO key and asks before logging
+gh out), or, when xo cannot run, deletes that key itself, then <code>~/.xo</code> and its <code>PATH</code> line. After an
+install, run <code>xo login</code>: it signs you in to XO in your browser when the xo server offers that, and
+otherwise asks for your XO API key.</li>
+<li><strong>Auto-update</strong> is off unless you turn it on: one question in the terminal (Enter leaves it as it
+is), <code>--auto-update</code> or <code>--no-auto-update</code>, or the checkbox in the form's This machine panel. On, it
+writes a marker each tool reads before a command: <code>~/qq-tools/auto-update</code> (qq's and qqsync's commits)
+and <code>auto-update</code> next to xo's key (<code>~/.config/xo</code>, or <code>$XDG_CONFIG_HOME/xo</code>), holding the commit setup
+installed. Then qq and xo check <code>pins.json</code> on setup's main at most once a day in the background, and
+when it names a newer commit they update to it before the next command (xo on Windows, where a running
+<code>xo.exe</code> cannot be replaced, right after it). A tool installed some other way, or at another commit, is
+left alone until you update it here. While it is on, an install or update here writes the marker again
+with the new commit; off deletes the markers, and removing a tool deletes its auto-update files.</li>
+<li><strong>Python.</strong> qq needs 3.11.4 or newer and xo 3.11: <code>QQ_PYTHON</code> if set, else <code>python3</code>, else the newest
+<code>python3.N</code> it finds. For qq, that name is then written to your startup file as <code>QQ_PYTHON</code>, so qq
+finds it later. On a Mac with none, the first step is <code>brew install python@3.13</code>, then (for qq)
+<code>export QQ_PYTHON=python3.13</code> goes into the same startup file as qq's <code>PATH</code> line. That differs
+from the qq guide's Python line, which always writes <code>~/.zshrc</code>, so a bash user's next terminal
+would have qq on <code>PATH</code> but no <code>QQ_PYTHON</code>. On Linux (and WSL) with none, nothing runs, and the page
+and the terminal link uv's install page (<a href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener">https://docs.astral.sh/uv/getting-started/installation/</a>) and
+name <code>uv python install 3.13</code>, which needs no sudo; Ubuntu 22.04's own <code>python3.11</code> is 3.11.0, too old
+for qq, and a bare <code>uv python install</code> gives the newest Python (3.15), which qq-setup does not look for.
+Once a newer one is there, the terminal's Python line says which one the install step will use. On
+Windows xo uses <code>python</code>, else <code>py</code>, from your PATH; with neither new enough, nothing runs and the
+page links <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">https://www.python.org/downloads/windows/</a> (tick "Add python.exe to PATH" in the
+installer). It checks for <code>git</code> first.</li>
+<li><code>--only qq</code> or <code>--only xo</code> picks one; <code>--update</code> or <code>--remove</code> answers for every tool; <code>--yes</code> asks
+nothing (without a terminal it needs it); <code>--dry-run</code> prints the commands and runs nothing.</li>
+</ul>
+<h3>How it keeps your login safe</h3>
+<ul>
+<li>Every GitHub call is <code>gh api --method GET</code>. qq-setup never reads, stores or prints your token:
+<code>gh</code> makes the request itself.</li>
+<li>The form server listens on <code>127.0.0.1</code> only, answers only requests whose <code>Host</code> is exactly that
+address (no DNS rebinding), and answers <code>/api/*</code> only to the one tab that used the printed link.
+The link's key is in its <code>#fragment</code>, which browsers never send to a server, and works once: the
+tab trades it for an HttpOnly, SameSite=Strict cookie plus a token it keeps in its own
+<code>sessionStorage</code>, and drops the key from the address bar. Every later call needs both, so another
+tab, another browser, or another program listening on 127.0.0.1 (browsers send cookies to every
+port there) gets nothing. The terminal says when the link was used, and when someone tries it again.</li>
+<li>When qq-setup opens your browser itself, it passes only the path of a page only you can read (a
+0600 file in a 0700 temporary folder, under <code>~/snap/&lt;browser&gt;/common</code> for a snap browser), deleted
+once used, so the key does not appear on a command line other users could see with <code>ps</code>. If you
+open the printed link by hand, it briefly can, which is why it works only once. Flatpak browsers,
+or a <code>.html</code> file that opens in an editor, need the printed link.</li>
+<li>The page receives only names the command already read (orgs, repos, kinds) and your platform
+name, never a token. Its answers are checked against those
+names before the terminal uses them.</li>
+<li>The "This machine" step never receives a command from the page. The page sends only a choice
+per tool, which must be one the tool's state offers, with the signature of the look it shows;
+qq-setup plans only while the machine still matches that look (so every warning on the page is
+current), and keeps the plan under a random id. Run sends only that id, runs the latest plan once,
+and first looks at the machine again: if anything changed (local work in qq, a tool added or
+gone, a demo folder or <code>QQ_PYTHON</code> line), it refuses and the page shows the new state. Steps run
+with no input from a terminal, one at a time, and stop at the first that fails. Only one run goes
+at a time, and the form cannot be closed under it.</li>
+<li>So the link now does more than read: whoever opens it first can run the steps the page offers,
+including removing qq even with local work, deleting demo folders ticked on the page and logging
+xo out. That is why the key works once, never travels on a command line when qq-setup opens the
+browser, and why the terminal says when the link was used and when someone tries it again: if
+you did not open it, press Ctrl-C.</li>
+<li>No telemetry. The page loads nothing from the internet (no web fonts, strict CSP).</li>
+</ul>
+<h3>On a Mac</h3>
+<p>It works the same. macOS ships Python 3.9, too old for qq, so on a Mac with no newer Python,
+installing qq starts with <code>brew install python@3.13</code> and sets <code>QQ_PYTHON=python3.13</code> (see
+Python above). About toolchains, the terminal and this section
+say the same thing:</p>
+<p>qq fetches toolchains for Linux x86_64 only, so on a Mac qq fetch clones the repo and then stops with
+"no pin for platform", and qq sync stops the same way: clone with git and install the repo's pinned
+tools yourself (qqsync show infra/repo.toml lists them). qq build and qq test then use them, from
+--toolchain NAME=ROOT or your PATH, and still check the pinned versions (exact Python, Node major);
+qq run uses your PATH.</p>
+<p>See the <a href="https://docs.quirq.dev/docs/install" target="_blank" rel="noopener">qq guide</a>. The CI workflows qq sets up for a repo run on
+GitHub's Linux runners, whatever machine you work on.</p>
+<h3>Develop</h3>
+<pre>npm ci
+npm run lint
+npm run typecheck
+npm test            # node:test, tests/*.test.mjs
+npm run check-form  # rebuilds the form and fails if out/ differs from what is committed
+npm run e2e         # Playwright: the real CLI against tests/fake-gh, 390 and 1280 px, light and dark</pre>
+<p>npx installs straight from this repo and must run no install scripts, so the built form is committed in <code>out/</code> and the package has no runtime
+dependencies. After changing <code>app/</code>, <code>components/</code> or <code>lib/</code>, run <code>npm run build</code> and commit <code>out/</code>;
+CI fails if it is stale. Publishing to npm is a later step that suraj decides.</p>
+<p>Layout: <code>cli/</code> is the command (plain ES modules with JSDoc types, no build step), <code>app/</code> and
+<code>components/</code> are the form (Next.js 16 static export, shadcn/ui), <code>lib/api.ts</code> is the form's side of
+the local API.</p>
+<h3>License</h3>
+<p>Apache-2.0. <code>components/ui/</code> is from shadcn/ui (MIT); see <code>components/ui/LICENSE</code>.</p>

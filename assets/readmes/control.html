@@ -1,0 +1,159 @@
+<p>Run commands on a remote machine without opening a port on it.</p>
+<p><code>control</code> has two roles. A <strong>controlled</strong> node polls a shared queue, checks each
+job, runs the ones its policy allows and posts signed results. A <strong>controller</strong>
+signs jobs, puts them on the queue and reads back verified results. The queue is
+pluggable: a git repository (any host, private recommended) or a plain directory
+(local disk, shared mount, synced folder).</p>
+<pre><code> controller                       queue (git repo / dir)                 controlled
+ ──────────                       ──────────────────────                 ──────────
+ control run -- uname -a  ──►  nodes/box/jobs/&lt;id&gt;.json    ──►  verify signature, check policy,
+                                                                 run with a clean env + timeout
+ verified output   ◄──────────  nodes/box/results/&lt;id&gt;.json ◄──  redact secrets, sign result
+                               nodes/box/results/&lt;id&gt;.log
+</code></pre>
+<p>Nothing runs unless it is signed by a key the node trusts <strong>and</strong> allowed by the
+node's policy. The default policy allows nothing.</p>
+<p>Status: early (0.1). The message format is versioned (<code>"v": 1</code>).</p>
+<h3>Install</h3>
+<p>Requires Node.js 20 or newer. No dependencies.</p>
+<pre>git clone &lt;this repo&gt; control &amp;&amp; cd control
+npm test            # optional
+npm link            # puts `control` on your PATH</pre>
+<h3>Quick start (git queue)</h3>
+<ol>
+<li>
+<p>Create an empty <strong>private</strong> repository to use as the queue, and clone it on
+both machines, e.g. at <code>~/control/queue</code>.</p>
+</li>
+<li>
+<p>On the machine you want to control:</p>
+<pre>control init --role controlled --node box --dir ~/control --transport git --queue queue</pre>
+</li>
+<li>
+<p>On your machine:</p>
+<pre>control init --role controller --name alice --dir ~/control --transport git --queue queue</pre>
+</li>
+<li>
+<p>Exchange <strong>public</strong> keys (<code>keys/&lt;name&gt;.pub</code>, safe to share; the <code>.key</code>
+files never leave their machine):</p>
+<pre># on box, with alice.pub copied over
+control trust alice.pub --name alice --config ~/control/control.json
+# on alice's machine, with box.pub copied over
+control trust box.pub --name box --config ~/control/control.json</pre>
+</li>
+<li>
+<p>Edit the node's <code>policy</code> in <code>~/control/control.json</code> (see below), then start it:</p>
+<pre>control serve --role controlled --config ~/control/control.json</pre>
+<p>For a service that survives reboots, see <code>examples/control-controlled.service</code>.</p>
+</li>
+<li>
+<p>Run something:</p>
+<pre>export CONTROL_CONFIG=~/control/control.json
+control run -- uname -a                 # waits and prints the output
+control run --no-wait -- df -h          # prints the job id
+control status &lt;id&gt;
+control logs &lt;id&gt;
+control list
+control cancel &lt;id&gt;                     # only before it starts
+control serve --role controller         # follow every new result as it lands</pre>
+</li>
+</ol>
+<h3>Policy</h3>
+<p>The node decides what it will run. Rules match the program name exactly
+(<code>argv[0]</code>), then the arguments:</p>
+<pre>"policy": {
+  "allow": [
+    { "command": "uname", "args": ["-a"] },
+    { "command": "git", "argsPrefix": ["-C", "/srv/app", "pull"] },
+    { "command": "uptime" }
+  ],
+  "scripts": false,
+  "workdirs": ["~", "/srv/app"],
+  "defaultTimeoutSeconds": 300,
+  "maxTimeoutSeconds": 3600,
+  "passEnv": ["LANG"],
+  "jobEnv": [],
+  "maxOutputBytes": 1048576
+}</pre>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Allows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>args: [...]</code></td>
+<td>exactly these arguments</td>
+</tr>
+<tr>
+<td><code>argsPrefix: [...]</code></td>
+<td>these first arguments, anything after</td>
+</tr>
+<tr>
+<td>neither</td>
+<td>any arguments (you trust that program completely)</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>"scripts": true</code> lets trusted controllers send whole shell scripts
+(<code>control run --script deploy.sh</code>). That is full shell access as the node's
+user: use it for a machine you own end to end, never on a shared host.</p>
+<p>Jobs run without a shell (for argv jobs), in a fresh environment that holds
+only <code>PATH</code> (from the policy), <code>HOME</code>, the <code>passEnv</code> variables and job
+variables named in <code>jobEnv</code>. The working directory must resolve, through
+symlinks, inside <code>workdirs</code>.</p>
+<h3>Secrets</h3>
+<ul>
+<li>Private keys are created with mode 0600, never overwritten, and refused if
+others can read them.</li>
+<li>Logs are redacted on the node before they are written to the queue: common
+token formats (GitHub, AWS, <code>sk-</code> API keys, Slack, JWTs, bearer headers, URL
+passwords, PEM private keys, <code>NAME=secret</code> style assignments), the values of
+the node's own environment variables whose names look secret, and anything
+listed under <code>redact.env</code> / <code>redact.patterns</code>. Redaction is a safety net, not
+a guarantee: do not run jobs that print secrets.</li>
+<li>Job payloads and results are signed, not encrypted. Anyone who can read the
+queue can read them, so keep a git queue private.</li>
+</ul>
+<h3>Exit codes</h3>
+<p><code>control run</code> (waiting) and <code>control status</code> exit with the job's own exit code,
+or: <code>124</code> timed out, <code>130</code> cancelled, <code>2</code> rejected / error / result failed
+verification, <code>3</code> no result yet, <code>1</code> usage or config error, <code>64</code> unknown command.</p>
+<h3>Transports</h3>
+<div class="qtable"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Use it for</th>
+<th>Config</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>git</code></td>
+<td>machines that can both reach a git host</td>
+<td><code>{ "type": "git", "path": "&lt;clone&gt;", "remote": "origin", "branch": "main" }</code></td>
+</tr>
+<tr>
+<td><code>dir</code></td>
+<td>one machine, a shared mount, or a synced folder</td>
+<td><code>{ "type": "dir", "path": "&lt;dir&gt;" }</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Others (HTTP, object storage) can be added with <code>registerTransport</code>; see
+<a href="https://github.com/quirq-ai/control/blob/main/DESIGN.md#transports" target="_blank" rel="noopener">DESIGN.md</a>.</p>
+<h3>Library</h3>
+<pre>import { Controller, Controlled, loadConfig } from 'control';
+const ctl = await new Controller(loadConfig('control.json')).start();
+const job = await ctl.submit({ argv: ['uname', '-a'] });
+const r = await ctl.wait(job.node, job.id, { timeoutMs: 60000 });
+if (r?.verified) console.log(r.result.status, r.log);</pre>
+<h3>Design and security</h3>
+<p>See <a href="https://github.com/quirq-ai/control/blob/main/DESIGN.md" target="_blank" rel="noopener">DESIGN.md</a> for the message formats, the trust model and what
+<code>control</code> does and does not protect against. Report security problems as
+described in <a href="https://github.com/quirq-ai/control/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+<h3>License</h3>
+<p>MIT, see <a href="https://github.com/quirq-ai/control/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>
